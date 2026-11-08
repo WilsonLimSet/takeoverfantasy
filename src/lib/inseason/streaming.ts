@@ -21,6 +21,11 @@ const WAIVER_DELAY_DAYS = 2;
 const MAX_MOVES = 4;
 /** A dropped player rostered in at least this share of ESPN leagues will probably get claimed. */
 const LIKELY_CLAIMED_PCT = 15;
+/** Show turn-of-the-week pickups once this many game days (or fewer) are left in the week. */
+const BRIDGE_DAYS_LEFT = 2;
+/** Next week's first days that a turn-of-the-week pickup should also play. */
+const BRIDGE_NEXT_DAYS = 2;
+const BRIDGE_PICKS = 6;
 
 /** Chance he plays tonight from the tag alone (the lineup check, which has no return dates). */
 const PLAY_CHANCE: Partial<Record<PlayerStatus, number>> = {
@@ -130,6 +135,29 @@ export interface StreamingPlan {
   coreCost?: CoreCost;
   /** Things that block or change your moves (an IR player who's no longer out, no pickups left). */
   warnings: string[];
+  /** Near the week's end: pickups who play the last days and early next week. */
+  bridge?: BridgePlan;
+}
+
+/**
+ * Pickups for the turn of the week: free agents who play on the week's last game days and again in
+ * the first days of next week, so one add covers both (and next week's pickups start fresh).
+ */
+export interface BridgePlan {
+  /** The days shown: this week's game days left, then next week's first days. */
+  days: { date: string; next: boolean }[];
+  picks: BridgePickup[];
+}
+
+export interface BridgePickup {
+  player: StreamPlayer & { percentOwned?: number };
+  drop: string;
+  /** Lineup points he adds over this week's days left and next week's first days. */
+  pointsGain: number;
+  thisWeek: number;
+  early: number;
+  /** One per shown day: his team plays, and whether that game makes your lineup. */
+  days: { game: boolean; counts: boolean }[];
 }
 
 export interface FreeAgentNote {
@@ -593,6 +621,50 @@ export function buildStreamingPlan(snapshot: LeagueSnapshot, core: number[], wat
   });
   faNotes.sort((a, b) => b.pointsGain - a.pointsGain || b.player.fppg * b.player.gamesLeft - a.player.fppg * a.player.gamesLeft);
 
+  // Turn of the week: who plays the last days and early next week. Free agents only (a waiver
+  // claim misses the last days), each with his best drop over both stretches.
+  let bridge: BridgePlan | undefined;
+  const firstNext = next?.days[0]?.scoringPeriodId;
+  if (next && firstNext !== undefined && gameDays.length > 0 && gameDays.length <= BRIDGE_DAYS_LEFT) {
+    const early: MatchupWeekSchedule = { days: next.days.slice(0, BRIDGE_NEXT_DAYS), teamGames: next.teamGames };
+    const plays = (c: Candidate, s: MatchupWeekSchedule, period: number) => (s.teamGames[c.player.nbaTeamId] ?? []).includes(period);
+    const baseEarly = simulateWeek(roster, early, firstNext, slots, asOf);
+    const picks: BridgePickup[] = [];
+    for (const add of freeAgents) {
+      if (add.delay || !early.days.some((d) => plays(add, early, d.scoringPeriodId))) continue;
+      let best: { drop: Candidate; thisWeek: WeekResult; earlyWeek: WeekResult; gain: number; a: number; b: number } | null = null;
+      for (const drop of droppable) {
+        const swapped = [...roster.filter((c) => c.player.id !== drop.player.id), add];
+        const thisWeek = simulateWeek(swapped, week, today, slots, asOf);
+        const earlyWeek = simulateWeek(swapped, early, firstNext, slots, asOf);
+        const a = thisWeek.points - baseline.points;
+        const b = earlyWeek.points - baseEarly.points;
+        if (!best || a + b > best.gain) best = { drop, thisWeek, earlyWeek, gain: a + b, a, b };
+      }
+      // He has to help on both sides of the week line. And this week's part has to be real: if
+      // the player you'd drop plays the last days too, keeping him and swapping after the week
+      // gets next week's games just as well.
+      if (!best || best.a < minGain || !(best.thisWeek.usableById.get(add.player.id) ?? 0) || !(best.earlyWeek.usableById.get(add.player.id) ?? 0)) continue;
+      const fa = pool.get(add.player.id);
+      picks.push({
+        player: { ...describe(add, week, today, best.thisWeek.usableById.get(add.player.id) ?? 0, asOf, today, next), percentOwned: fa?.player.ownership?.percentOwned },
+        drop: best.drop.player.name,
+        pointsGain: Math.round(best.gain),
+        thisWeek: Math.round(best.a),
+        early: Math.round(best.b),
+        days: [
+          ...gameDays.map((d) => ({ game: plays(add, week, d.scoringPeriodId), counts: !!best!.thisWeek.startedByDay.get(d.scoringPeriodId)?.has(add.player.id) })),
+          ...early.days.map((d) => ({ game: plays(add, early, d.scoringPeriodId), counts: !!best!.earlyWeek.startedByDay.get(d.scoringPeriodId)?.has(add.player.id) })),
+        ],
+      });
+    }
+    picks.sort((x, y) => y.pointsGain - x.pointsGain);
+    bridge = {
+      days: [...gameDays.map((d) => ({ date: d.date, next: false })), ...early.days.map((d) => ({ date: d.date, next: true }))],
+      picks: picks.slice(0, BRIDGE_PICKS),
+    };
+  }
+
   // Worth-a-move players first, biggest gain on top; rostered ones last.
   const rank = (w: WatchlistNote) => (w.rostered ? -2 : w.bestMove ? w.bestMove.pointsGain : -1);
   watchlist.sort((a, b) => rank(b) - rank(a));
@@ -615,5 +687,6 @@ export function buildStreamingPlan(snapshot: LeagueSnapshot, core: number[], wat
     matchup,
     coreCost,
     warnings,
+    bridge,
   };
 }

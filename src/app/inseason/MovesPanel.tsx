@@ -2,6 +2,7 @@
 
 import type { MatchupGamesComparison, MatchupSideGames } from '@/types';
 import Link from 'next/link';
+import { Fragment } from 'react';
 import type { MoveDay, StreamingPlan, StreamMove, WatchlistNote } from '@/lib/inseason/streaming';
 import { Headshot, InjuryBadge, TeamLogo } from '@/components/ui';
 import { Panel } from './useMe';
@@ -390,6 +391,68 @@ export function WatchlistPanel({ notes }: { notes: WatchlistNote[] }) {
           </li>
         ))}
       </ul>
+    </Panel>
+  );
+}
+
+const dayList = (dates: string[]) => {
+  const names = dates.map((d) => dayLabel(d));
+  return names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}`;
+};
+
+/**
+ * The turn of the week: free agents who play the week's last days and early next week, so one
+ * pickup covers both. Shown only in the last couple of days of a matchup.
+ */
+export function BridgePanel({ bridge, addsLeft, espnUrl }: { bridge: NonNullable<StreamingPlan['bridge']>; addsLeft: number | null; espnUrl?: string }) {
+  if (!bridge.picks.length) return null;
+  const now = bridge.days.filter((d) => !d.next).map((d) => d.date);
+  const early = bridge.days.filter((d) => d.next).map((d) => d.date);
+  const split = now.length;
+  return (
+    <Panel
+      title={`Plays ${dayList(now)} and early next week`}
+      sub={`Your week ends ${dayLabel(now[now.length - 1])}. Each of these plays then and on ${dayList(early)}, so one pickup counts for both weeks.${addsLeft !== null ? ' Your pickup limit resets next week.' : ''} Free agents only: add now.`}
+      right={espnUrl ? <a href={espnUrl} target="_blank" rel="noopener noreferrer" className="btn-accent">Add on ESPN</a> : undefined}
+      className="mb-5"
+    >
+      <ul className="-my-1">
+        {bridge.picks.map((p) => (
+          <li key={p.player.id} className="flex items-center gap-3 border-t border-line py-2.5 first:border-t-0">
+            <Headshot id={p.player.id} name={p.player.name} size={36} />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 truncate text-sm">
+                <span className="truncate font-medium">{p.player.name}</span>
+                <InjuryBadge s={p.player.status} />
+              </div>
+              <div className="flex items-center gap-1 text-xs text-muted">
+                {p.player.nbaTeamAbbrev && <TeamLogo team={p.player.nbaTeamAbbrev} size={12} />}
+                <span className="truncate">
+                  {p.player.fppg} pts/game{p.player.gamesNext !== undefined ? ` · ${p.player.gamesNext} games next week` : ''} · drop {p.drop}
+                </span>
+              </div>
+            </div>
+            <div className="hidden shrink-0 gap-1 sm:flex" aria-label="Games by day">
+              {p.days.map((d, i) => (
+                <Fragment key={bridge.days[i].date}>
+                  {i === split && <span aria-hidden className="mx-1 w-px self-stretch bg-line" />}
+                  <div className="flex w-6 flex-col items-center gap-0.5" title={`${dayLabel(bridge.days[i].date)}${i >= split ? ' (next week)' : ''}: ${d.counts ? 'starts' : d.game ? 'plays, but your lineup is full' : 'no game'}`}>
+                    <span className={`inline-block h-2 w-2 rounded-full ${d.counts ? 'bg-accent' : d.game ? 'border border-muted' : 'bg-line/60'}`} />
+                    <span className="text-[9px] uppercase tracking-wide text-muted">{dayLabel(bridge.days[i].date).slice(0, 2)}</span>
+                  </div>
+                </Fragment>
+              ))}
+            </div>
+            <div className="w-14 shrink-0 text-right">
+              <div className="text-sm font-medium tabular-nums text-accent">+{p.pointsGain}</div>
+              <div className="text-[10px] uppercase tracking-wide text-muted">pts</div>
+            </div>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 border-t border-line pt-2.5 text-xs text-muted">
+        Points he adds in your lineup over {dayList(now)} and {dayList(early).replace(' or ', ' and ')}. Dots: filled when his game makes your lineup. After {dayLabel(early[early.length - 1])} you can swap him for next week&apos;s best pickup.
+      </p>
     </Panel>
   );
 }
