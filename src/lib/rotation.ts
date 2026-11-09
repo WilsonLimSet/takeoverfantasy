@@ -163,6 +163,18 @@ function classify(p: Player, games: Game[], hurt: boolean, now: number, dep?: De
       note: `${Math.round(now3Played)} min the last 3 games, down from ${Math.round(before)}${season > before + 2 ? ` (${Math.round(season)} on the season)` : ""}. His season average hides it.`,
     };
   }
+  // A slower slide over 4 games (a teammate eating into his role a few minutes a night).
+  const last4 = avail.slice(0, 4).filter((g) => g.min > 0);
+  const prior4 = avail.slice(4).filter((g) => g.min > 0);
+  if (last4.length === 4 && prior4.length >= 3) {
+    const now4 = avg(last4.map((g) => g.min)), was = avg(prior4.map((g) => g.min));
+    if (was - now4 >= 6 && season - now4 >= 4) {
+      return {
+        ...base, kind: "down",
+        note: `${Math.round(now4)} min the last 4 games (${last4.map((g) => Math.round(g.min)).join(", ")}), down from ${Math.round(was)} before. Sliding, and his season average hides it.`,
+      };
+    }
+  }
   return null;
 }
 
@@ -208,6 +220,12 @@ export async function rotationReport(now = Date.now()): Promise<RotationReport |
     const news = v?.news && now - Date.parse(v.news.date) < 7 * DAY ? v.news : undefined;
     const c = classify(p, games, hurt, now, dep && { name: dep.name, until: dep.until, minutes: dep.minutes }, news);
     if (c) entries.push({ id: p.id, name: p.name, team: p.team, pos: p.pos.join("/"), pctOwned: Math.round(p.pctOwned ?? 0), ...c });
+  }
+  // Who's taking the minutes: a teammate whose role is growing at the same time.
+  for (const e of entries) {
+    if (e.kind !== "down" && e.kind !== "benched") continue;
+    const takers = entries.filter((x) => x.team === e.team && (x.kind === "up" || x.kind === "grown"));
+    if (takers.length) e.note += ` Meanwhile ${takers.map((x) => `${x.name} is up to ${Math.round(avg(x.recent))}`).join(" and ")}.`;
   }
   const report: RotationReport = { night, builtAt: now, entries };
   await kv.set(cacheKey, report).catch(() => {});
