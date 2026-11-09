@@ -9,7 +9,7 @@ import type { GameLog } from '@/types';
 import type { PickMode, StreamingPlan } from './streaming';
 import { pointsIn } from './gameLogs';
 
-export interface LoggedPick {
+interface LoggedPick {
   id: number;
   name: string;
   /** Points we expected over his periods. */
@@ -24,7 +24,7 @@ export interface PickGroup {
   picks: LoggedPick[];
 }
 
-export interface PickRecord {
+interface PickRecord {
   date: string;
   week: number;
   mode: PickMode;
@@ -37,13 +37,13 @@ export interface PickRecord {
  * Where a team's picks live: one per user scope (the storage adapter's), so two people looking at
  * the same team (a guest picking someone else's team in a public league) never share a record.
  */
-export interface PickScope { scope: string; leagueId: number; seasonId: number; teamId: number }
+interface PickScope { scope: string; leagueId: number; seasonId: number; teamId: number }
 const prefix = ({ scope, leagueId, seasonId, teamId }: PickScope) => `picks:${scope}${leagueId}:${seasonId}:${teamId}:`;
 
 const counted = (days: { counts: boolean }[], periods: number[]) => periods.filter((_, i) => days[i]?.counts);
 
 /** The day's ranked choices from a plan, ready to log. */
-export function picksFromPlan(plan: StreamingPlan): PickGroup[] {
+function picksFromPlan(plan: StreamingPlan): PickGroup[] {
   const groups: PickGroup[] = [];
   for (const m of plan.moves) {
     if (!m.runnerUp) continue;
@@ -111,7 +111,7 @@ export interface PickTrackRecord {
   recent: { date: string; kind: PickGroup['kind']; pick: string; got: number; next: string; nextGot: number }[];
 }
 
-export function summarize(recs: PickRecord[]): PickTrackRecord {
+function summarize(recs: PickRecord[]): PickTrackRecord {
   const out: PickTrackRecord = { graded: 0, beatNext: 0, scored: 0, expected: 0, recent: [] };
   const places: number[] = [];
   for (const r of [...recs].filter((r) => r.actual).sort((a, b) => b.date.localeCompare(a.date))) {

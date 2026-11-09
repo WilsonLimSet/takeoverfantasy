@@ -35,12 +35,6 @@ export interface Player {
   lastNews: number | null; // ms timestamp of the latest ESPN news item
 }
 
-export interface PlayersPayload {
-  season: number;
-  fetchedAt: string;
-  source: string;
-  players: Player[];
-}
 
 export const STAT_KEYS: StatKey[] = [
   "pts", "reb", "ast", "stl", "blk", "tov", "fgm", "fga", "ftm", "fta",

@@ -235,7 +235,7 @@ export function valuePlayer(p: Player, ctx: ValueContext, window?: { from: strin
 /* ---------------- Keeping score ---------------- */
 
 type Pred = Record<string, [perGame: number, steady: number]>;
-export interface PredictionScore { date: string; n: number; mae: number; bias: number; steady: { n: number; mae: number; bias: number }; volatile: { n: number; mae: number; bias: number } }
+interface PredictionScore { date: string; n: number; mae: number; bias: number; steady: { n: number; mae: number; bias: number }; volatile: { n: number; mae: number; bias: number } }
 
 /** Save today's per-game values (before the games) for players anyone might roster. */
 export async function recordPredictions(date: string, ctx?: ValueContext): Promise<number> {

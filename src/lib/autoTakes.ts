@@ -24,7 +24,7 @@ const ITEMS_PER_CALL = 40;
 const MAX_ITEMS_PER_RUN = 240;
 const SEEN_KEEP = 3000;
 
-export interface RawItem {
+interface RawItem {
   name: string;
   team: string;
   kind: string;
@@ -92,7 +92,7 @@ async function manualItems(): Promise<RawItem[]> {
 
 const clampMult = (v: number) => Math.min(1.15, Math.max(0.85, v));
 
-export interface IngestResult { checked: number; fresh: number; added: RawItem[]; published: boolean; skipped?: string }
+interface IngestResult { checked: number; fresh: number; added: RawItem[]; published: boolean; skipped?: string }
 
 /** `lookbackDays` and `maxItems` widen a backfill; `ignoreTakes` (testing) hides current takes from the model. */
 export async function ingestNews(opts: { dryRun?: boolean; lookbackDays?: number; maxItems?: number; ignoreTakes?: boolean } = {}): Promise<IngestResult> {

@@ -17,7 +17,7 @@ import { kvStore } from './storage';
 import type { LeagueContext } from './profile';
 import type { LeagueSnapshot, LeagueTransaction, SnapshotDiff, Watchlist } from '@/types';
 
-export interface RefreshedLeague {
+interface RefreshedLeague {
   snapshot: LeagueSnapshot;
   diff: SnapshotDiff;
   /** The user's ESPN watchlist. */
@@ -108,7 +108,7 @@ export async function refreshLeague(ctx: LeagueContext): Promise<RefreshedLeague
 }
 
 /** Older than this, a page view reloads the league from ESPN (free) instead of waiting for the cron. */
-export const VIEW_REFRESH_MS = 30 * 60 * 1000;
+const VIEW_REFRESH_MS = 30 * 60 * 1000;
 
 /**
  * A page asks for moves, the briefing and the rotation at once, and each route wants the league.

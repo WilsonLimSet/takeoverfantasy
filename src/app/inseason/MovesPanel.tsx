@@ -63,7 +63,7 @@ function Who({ id, name, team, meta, tone }: { id: number; name: string; team?: 
 const fmt = (n: number) => n.toLocaleString('en-US');
 
 /** "Usually 15–40 pts · under half his average 1 game in 5": the range behind the average. */
-export function rangeText(r: GameRange): string {
+function rangeText(r: GameRange): string {
   const bust = r.bust >= 0.05 ? `under half his average about 1 game in ${Math.max(2, Math.round(1 / r.bust))}` : 'rarely under half his average';
   return `Usually ${r.low}–${r.high} pts a game · ${bust}`;
 }
@@ -99,7 +99,7 @@ function DayStrip({ days, tone }: { days: MoveDay[]; tone: 'add' | 'drop' }) {
  * Then what's holding the moves back (the core list) and anything that blocks them.
  */
 /** The moves' total, as the rows show it (each move's gain assumes the ones before it). */
-export const movesGain = (plan: Pick<StreamingPlan, 'moves'>) => Math.round(plan.moves.reduce((s, m) => s + m.pointsGain, 0));
+const movesGain = (plan: Pick<StreamingPlan, 'moves'>) => Math.round(plan.moves.reduce((s, m) => s + m.pointsGain, 0));
 
 /** When to make a move: now, or after a given day's games (US dates). */
 const whenLabel = (m: StreamMove) => (m.swapAfter ? `After ${dayLabel(m.swapAfter.date)}’s games` : 'Now');

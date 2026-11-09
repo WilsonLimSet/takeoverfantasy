@@ -2,7 +2,7 @@
  * Takeover Fantasy's mark: a basketball whose seam rises out of it as an arrow, up and to the
  * right. Same drawing as src/app/icon.svg (the dark seam underneath cuts the gap in the ball).
  */
-export const MARK_SEAM = "M23 65C44 65 52 40 80 25M76.1 36.4L80 25L68.4 21.9";
+const MARK_SEAM = "M23 65C44 65 52 40 80 25M76.1 36.4L80 25L68.4 21.9";
 
 export function LogoMark({ size = 22, className = "" }: { size?: number; className?: string }) {
   return (

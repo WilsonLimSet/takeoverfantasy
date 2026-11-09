@@ -54,8 +54,11 @@ export async function GET() {
   }
   // The ESPN watchlist is read fresh (a small request), so a player starred in the ESPN app shows
   // up right away; if he isn't in the stored league data yet, reload it so he can be valued.
-  const watchlist = await freshWatchlist(ctx).catch(() => ctx.storage.getWatchlist(ctx.leagueId, ctx.seasonId));
-  let snapshot = await freshSnapshot(ctx);
+  const [watchlist, stored] = await Promise.all([
+    freshWatchlist(ctx).catch(() => ctx.storage.getWatchlist(ctx.leagueId, ctx.seasonId)),
+    freshSnapshot(ctx),
+  ]);
+  let snapshot = stored;
   const known = new Set([...(snapshot?.freeAgentsTopN ?? []).map((f) => f.player.id), ...(snapshot?.teams ?? []).flatMap((t) => (t.roster ?? []).map((r) => r.player.id))]);
   // At most every 2 minutes, so a watched player ESPN never returns (G League, retired) can't force a reload each visit.
   if (snapshot && (watchlist?.playerIds ?? []).some((id) => !known.has(id))) snapshot = await freshSnapshot(ctx, 2 * 60 * 1000);

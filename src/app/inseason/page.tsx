@@ -9,7 +9,7 @@ import { InjuryBadge } from '@/components/ui';
 import { BridgePanel, EdgeCard, HeadToHead, TrackRecordPanel, MatchupGamesPanel, MoveRow, StatStrip, WatchlistPanel, type MovesPreview, type MovesResponse } from './MovesPanel';
 import { SchedulePanel } from './SchedulePanel';
 import { RotationPanel } from './RotationPanel';
-import { ErrorBox, formatAge, Gate, invalidateCached, Loading, MOVES_URL, Panel, SaveLeague, useCached, useMeContext } from './useMe';
+import { ErrorBox, formatAge, Gate, isGated, invalidateCached, Loading, MOVES_URL, Panel, ROTATION_URL, SaveLeague, useCached, useMeContext } from './useMe';
 
 function RosterAlerts({ briefing }: { briefing: DailyBriefing }) {
   const changes = briefing.statusChanges.filter((c) => c.isMyPlayer);
@@ -99,7 +99,8 @@ export default function ThisWeekPage() {
       const j = await fetch('/api/inseason/refresh', { method: 'POST' }).then((r) => r.json());
       if (!j.success) setError(j.error ?? 'Refresh failed');
       await load();
-      invalidateCached('/api/inseason/weekly-plan');
+      // Everything else read the old league: reload what's cached.
+      invalidateCached(ROTATION_URL, '/api/inseason/stash', '/api/inseason/trades');
     } finally {
       setRefreshing(false);
     }
@@ -111,7 +112,7 @@ export default function ThisWeekPage() {
   if (needs === 'pro' && moves.preview) {
     return <><Preview p={moves.preview} />{me && !me.signedIn && <div className="mb-5"><SaveLeague /></div>}<Gate needs="pro" /></>;
   }
-  if (needs === 'signin' || needs === 'pro' || needs === 'connect') return <Gate needs={needs} />;
+  if (isGated(needs)) return <Gate needs={needs} />;
 
   const refreshButton = (
     <button onClick={refresh} disabled={refreshing} className="btn-ghost">

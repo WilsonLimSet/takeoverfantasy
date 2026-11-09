@@ -1,5 +1,5 @@
 /** Parse and sanitize a shared mock-draft result from URL search params. */
-export interface MockShare {
+interface MockShare {
   grade: string;
   place: number;
   teams: number;

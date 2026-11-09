@@ -2,9 +2,7 @@
 
 import { Headshot, SkeletonRows, TeamLogo } from '@/components/ui';
 import { isRoleDown as isDown, isRoleUp as isUp, type LeagueRotationEntry, type RotationKind, type RotationResponse } from '@/lib/rotationKinds';
-import { Panel, useCached } from './useMe';
-
-export const ROTATION_URL = '/api/inseason/rotation';
+import { Panel, ROTATION_URL, useCached } from './useMe';
 
 const LABEL: Record<RotationKind, string> = {
   up: 'Minutes up',

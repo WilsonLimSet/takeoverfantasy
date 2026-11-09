@@ -19,7 +19,7 @@ const MAX_MIN = 36;
 /** With no return date (or one already passed), count the absence for this many days only. */
 const UNDATED_DAYS = 3;
 /** Absences this long make a pickup worth keeping, not just streaming. */
-export const LONG_ABSENCE_DAYS = 14;
+const LONG_ABSENCE_DAYS = 14;
 const POSITION_ORDER = ['PG', 'SG', 'SF', 'PF', 'C'];
 
 export interface TeammateBoost {
@@ -32,7 +32,7 @@ export interface TeammateBoost {
   fppg: number;
 }
 
-export interface Projection {
+interface Projection {
   fppg: (p: Player) => number;
   minutes: (p: Player) => number;
   /** How much of the minutes projection rests on this season's games (0 to 1). */

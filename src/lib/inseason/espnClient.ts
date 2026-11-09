@@ -13,7 +13,6 @@ import type {
   ESPNTeam,
   ESPNMatchup,
   ESPNLeagueSettings,
-  ESPNProTeamSchedule,
 } from '@/types/espn';
 
 // ESPN API base URL
@@ -27,7 +26,7 @@ const RATE_LIMIT = {
 };
 
 // ESPN view parameters for different data fetches
-export const ESPN_VIEWS = {
+const ESPN_VIEWS = {
   settings: 'mSettings',
   teams: 'mTeam',
   roster: 'mRoster',
@@ -290,7 +289,7 @@ async function fetchPlayersByIds(playerIds: number[], _scoringPeriodId?: number)
 /**
  * Get league settings including scoring rules, roster settings, etc.
  */
-export async function getLeagueSettings(): Promise<ESPNLeagueSettings> {
+async function getLeagueSettings(): Promise<ESPNLeagueSettings> {
   const response = await espnFetch<ESPNLeagueResponse>('', {
     views: [ESPN_VIEWS.settings, ESPN_VIEWS.status],
   });
@@ -343,7 +342,7 @@ export async function getLeagueInfo(): Promise<{
 /**
  * Get rosters for all teams
  */
-export async function getLeagueRosters(scoringPeriodId?: number): Promise<ESPNTeam[]> {
+async function getLeagueRosters(scoringPeriodId?: number): Promise<ESPNTeam[]> {
   const response = await espnFetch<ESPNLeagueResponse>('', {
     views: [ESPN_VIEWS.roster, ESPN_VIEWS.teams],
     scoringPeriodId,
@@ -355,7 +354,7 @@ export async function getLeagueRosters(scoringPeriodId?: number): Promise<ESPNTe
 /**
  * Get matchups for a specific week
  */
-export async function getMatchups(week?: number): Promise<ESPNMatchup[]> {
+async function getMatchups(week?: number): Promise<ESPNMatchup[]> {
   const options: FetchOptions = {
     views: [ESPN_VIEWS.matchup, ESPN_VIEWS.matchupScore],
   };
@@ -371,7 +370,7 @@ export async function getMatchups(week?: number): Promise<ESPNMatchup[]> {
 /**
  * Get top free agents
  */
-export async function getFreeAgents(params?: {
+async function getFreeAgents(params?: {
   limit?: number;
   scoringPeriodId?: number;
 }): Promise<ESPNFreeAgentResponse> {
@@ -389,7 +388,7 @@ export async function getFreeAgentPool(limit = 300, scoringPeriodId?: number): P
 /**
  * Get NBA pro team schedule from ESPN
  */
-export async function getNBAProTeamSchedule(): Promise<Array<{
+async function getNBAProTeamSchedule(): Promise<Array<{
   id: number;
   abbrev: string;
   proGamesByScoringPeriod?: Record<string, Array<{ id: number; date: number }>>;
@@ -419,7 +418,7 @@ export async function getNBAProTeamSchedule(): Promise<Array<{
  * Get recent league transactions (adds/drops by other teams)
  * Uses kona_league_communication view which contains ACTIVITY_TRANSACTIONS topics
  */
-export async function getRecentTransactions(): Promise<Array<{
+async function getRecentTransactions(): Promise<Array<{
   teamId: number;
   type: 'ADD' | 'DROP';
   playerId: number;
@@ -505,119 +504,6 @@ export async function getRecentTransactions(): Promise<Array<{
   }
 }
 
-/**
- * Get raw ESPN transaction data for debugging
- * Shows exactly what ESPN API returns so we can verify ADD/DROP detection
- */
-export async function getRawTransactionData(): Promise<{
-  topics: Array<{
-    type: string;
-    date: number;
-    messages: Array<{
-      targetId: number;
-      to: number;
-      from: number;
-      for: number;
-      date: number;
-    }>;
-  }>;
-  interpretation: Array<{
-    playerId: number;
-    from: number;
-    to: number;
-    teamId: number;
-    interpretedAs: 'ADD' | 'DROP' | 'UNKNOWN';
-    reason: string;
-  }>;
-}> {
-  try {
-    const response = await espnFetch<{
-      communication?: {
-        topics?: Array<{
-          type: string;
-          date: number;
-          messages?: Array<{
-            targetId: number;
-            to: number;
-            from: number;
-            for: number;
-            date: number;
-          }>;
-        }>;
-      };
-    }>('', {
-      views: ['kona_league_communication'],
-    });
-
-    const twelveHoursAgo = Date.now() - 12 * 60 * 60 * 1000;
-    const topics: Array<{
-      type: string;
-      date: number;
-      messages: Array<{
-        targetId: number;
-        to: number;
-        from: number;
-        for: number;
-        date: number;
-      }>;
-    }> = [];
-
-    const interpretation: Array<{
-      playerId: number;
-      from: number;
-      to: number;
-      teamId: number;
-      interpretedAs: 'ADD' | 'DROP' | 'UNKNOWN';
-      reason: string;
-    }> = [];
-
-    for (const topic of response.communication?.topics || []) {
-      if (topic.type !== 'ACTIVITY_TRANSACTIONS') continue;
-      if (topic.date < twelveHoursAgo) continue;
-
-      topics.push({
-        type: topic.type,
-        date: topic.date,
-        messages: topic.messages || [],
-      });
-
-      for (const msg of topic.messages || []) {
-        let interpretedAs: 'ADD' | 'DROP' | 'UNKNOWN' = 'UNKNOWN';
-        let reason = '';
-        const FREE_AGENT_SLOT = 11;
-
-        // Skip messages without from/to
-        if (msg.from === undefined || msg.to === undefined) {
-          reason = `from=${msg.from} → to=${msg.to} (missing from/to)`;
-        } else if (msg.from !== FREE_AGENT_SLOT && msg.to !== FREE_AGENT_SLOT) {
-          reason = `from=${msg.from} → to=${msg.to} (internal roster move, ignored)`;
-        } else if (msg.to === FREE_AGENT_SLOT && msg.from !== FREE_AGENT_SLOT) {
-          interpretedAs = 'DROP';
-          reason = `from=${msg.from} (roster slot) → to=11 (free agent pool)`;
-        } else if (msg.from === FREE_AGENT_SLOT && msg.to !== FREE_AGENT_SLOT) {
-          interpretedAs = 'ADD';
-          reason = `from=11 (free agent pool) → to=${msg.to} (roster slot)`;
-        } else {
-          reason = `from=${msg.from} → to=${msg.to} (unexpected)`;
-        }
-
-        interpretation.push({
-          playerId: msg.targetId,
-          from: msg.from,
-          to: msg.to,
-          teamId: msg.for,
-          interpretedAs,
-          reason,
-        });
-      }
-    }
-
-    return { topics, interpretation };
-  } catch (error) {
-    console.error('Failed to fetch raw transactions:', error);
-    return { topics: [], interpretation: [] };
-  }
-}
 
 /**
  * Get combined league snapshot with all necessary data including NBA schedule
@@ -782,13 +668,6 @@ export async function getLeagueSnapshot(): Promise<{
   };
 }
 
-/**
- * Get NBA team schedule data
- * @deprecated Use getNBAProTeamSchedule instead
- */
-export async function getNBASchedule(): Promise<Record<number, ESPNProTeamSchedule>> {
-  return {};
-}
 
 // ============ NBA Team Reference Data ============
 

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Headshot, InjuryBadge, TeamLogo } from '@/components/ui';
 import type { MovesResponse } from '../MovesPanel';
-import { Gate, Loading, MOVES_URL, Panel, useCached } from '../useMe';
+import { Gate, isGated, Loading, MOVES_URL, Panel, useCached } from '../useMe';
 import { RotationPanel } from '../RotationPanel';
 
 /** Free agents ranked by what each would add to this week's lineup, not just by projection. */
@@ -12,7 +12,7 @@ export default function FreeAgentsPage() {
   const [hideWaivers, setHideWaivers] = useState(false);
 
   if (!data) return <Loading what="free agents" />;
-  if (data.needs === 'signin' || data.needs === 'pro' || data.needs === 'connect') return <Gate needs={data.needs} />;
+  if (isGated(data.needs)) return <Gate needs={data.needs} />;
   if (!data.plan) return <Panel title="Free agents"><p className="text-sm text-muted">{data.error ?? 'No league data yet.'}</p></Panel>;
 
   const rows = data.plan.freeAgents.filter((f) => !hideWaivers || !f.player.onWaivers);

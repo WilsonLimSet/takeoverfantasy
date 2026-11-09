@@ -99,7 +99,7 @@ const NEWS_SEEN_KEY = "breaking:newsSeen";
 const NEWS_PER_CHECK = 15;
 const PLAYERS_FEED = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/fba/seasons/${SEASON}/players?view=players_wl`;
 /** One alert per player per injury: the two sources and timeline tweaks don't repeat it. */
-export const sentKey = (id: number) => `breaking:sent:${id}`;
+const sentKey = (id: number) => `breaking:sent:${id}`;
 /** After this long a player can alert again (a new injury), so a stale key never blocks him for good. */
 const SENT_TTL_MS = 14 * DAY;
 /** News older than this when we first see it is old news, not breaking. */

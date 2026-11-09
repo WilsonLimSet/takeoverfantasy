@@ -28,7 +28,7 @@ interface EspnStatEntry {
 }
 
 /** Convert an ESPN season-split entry into a per-game line. */
-export function toLine(e: EspnStatEntry): StatLine | null {
+function toLine(e: EspnStatEntry): StatLine | null {
   const totals = e.stats ?? {};
   const avg = e.averageStats;
   const gp = Number(totals["42"] ?? 0);

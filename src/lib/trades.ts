@@ -64,13 +64,13 @@ const usDate = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-
 const r1 = (n: number) => Math.round(n * 10) / 10;
 const avg = (xs: number[]) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : 0);
 
-export interface TradeContext {
+interface TradeContext {
   ctx: ValueContext;
   /** Fantasy points in each recent game played, newest first. */
   recentPts: Map<number, number[]>;
 }
 
-export async function tradeContext(now = Date.now()): Promise<TradeContext> {
+async function tradeContext(now = Date.now()): Promise<TradeContext> {
   const kv = kvStore();
   const nights = Array.from({ length: LOOKBACK }, (_, i) => easternDate(now - (i + 1) * DAY));
   const [ctx, fpts, mins] = await Promise.all([
@@ -90,7 +90,7 @@ export async function tradeContext(now = Date.now()): Promise<TradeContext> {
   return { ctx, recentPts };
 }
 
-export function tradePlayer(p: Player, t: TradeContext): TradePlayer {
+function tradePlayer(p: Player, t: TradeContext): TradePlayer {
   const v = valuePlayer(p, t.ctx);
   const games = (t.recentPts.get(p.id) ?? []).slice(0, RECENT_GAMES);
   const recent = games.length >= 3 ? avg(games) : null;
@@ -123,7 +123,7 @@ export function tradePlayer(p: Player, t: TradeContext): TradePlayer {
  * What an open roster spot is worth: about the best player nobody rosters in a 10-team league (the
  * 131st best by rest-of-season value). A 2-for-1 frees a spot for one of these.
  */
-export function replacementLevel(t: TradeContext, rostered = 130): number {
+function replacementLevel(t: TradeContext, rostered = 130): number {
   const vals = t.ctx.players
     .filter((p) => p.team !== "FA")
     .map((p) => valuePlayer(p, t.ctx).ros)
@@ -134,7 +134,7 @@ export function replacementLevel(t: TradeContext, rostered = 130): number {
 /* ---------------- Rating one trade (the free checker) ---------------- */
 
 export type TradeVerdict = "accept" | "close" | "decline";
-export interface TradeRating {
+interface TradeRating {
   give: TradePlayer[];
   get: TradePlayer[];
   /** Rest-of-season points a game it adds to your team (negative: it costs you). */
@@ -151,7 +151,7 @@ const sum = (ps: TradePlayer[], k: "ros" | "perceived") => ps.reduce((s, p) => s
  * Your side's gain: what you get minus what you give, plus a free agent for every spot it opens.
  * Anyone worse than a free agent counts as one: you could swap him on waivers without a trade.
  */
-export const tradeGain = (give: TradePlayer[], get: TradePlayer[], repl: number, dropValue = repl) => {
+const tradeGain = (give: TradePlayer[], get: TradePlayer[], repl: number, dropValue = repl) => {
   const eff = (ps: TradePlayer[]) => ps.reduce((s, p) => s + Math.max(p.ros, repl), 0);
   const spots = give.length - get.length;
   // Opening spots adds free agents; taking on more players means dropping your weakest.
@@ -181,7 +181,7 @@ function notes(p: TradePlayer, side: "give" | "get"): string[] {
   return out;
 }
 
-export function judgeTrade(give: TradePlayer[], get: TradePlayer[], repl: number): TradeRating {
+function judgeTrade(give: TradePlayer[], get: TradePlayer[], repl: number): TradeRating {
   const gain = r1(tradeGain(give, get, repl));
   const verdict: TradeVerdict = gain >= MIN_GAIN ? "accept" : gain <= -MIN_GAIN ? "decline" : "close";
   const headline = {

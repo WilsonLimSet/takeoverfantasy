@@ -190,7 +190,7 @@ export interface BridgePlan {
   picks: BridgePickup[];
 }
 
-export interface BridgePickup {
+interface BridgePickup {
   player: StreamPlayer & { percentOwned?: number };
   drop: string;
   /** Lineup points he adds over this week's days left and next week's first days. */
@@ -261,7 +261,7 @@ const minutesWeight = (p: Player) => {
 };
 
 /** Expected minutes per game: this season's minutes take over from the projection within a few games. */
-export function expectedMinutes(p: Player): number {
+function expectedMinutes(p: Player): number {
   const s = p.stats;
   if (!s) return 0;
   if (!s.projectedMin) return s.seasonMin ?? 0;
@@ -396,7 +396,24 @@ function describe(c: Candidate, week: MatchupWeekSchedule, today: number, usable
   };
 }
 
+/**
+ * The plan only changes when the league data, core or watchlist do, but a page view, the morning
+ * Telegram and the opponent card each ask for it. Remember the last few per server instance
+ * (callers treat a plan as read-only).
+ */
+const plans = new Map<string, StreamingPlan | null>();
+const PLANS_KEPT = 40;
+
 export function buildStreamingPlan(snapshot: LeagueSnapshot, core: number[], watchIds: number[] = []): StreamingPlan | null {
+  const key = [snapshot.leagueId, snapshot.seasonId, snapshot.myTeamId, snapshot.fetchedAt, snapshot.acquisitions?.used, core.join(','), watchIds.join(',')].join('|');
+  if (plans.has(key)) return plans.get(key)!;
+  const plan = computePlan(snapshot, core, watchIds);
+  plans.set(key, plan);
+  if (plans.size > PLANS_KEPT) plans.delete(plans.keys().next().value!);
+  return plan;
+}
+
+function computePlan(snapshot: LeagueSnapshot, core: number[], watchIds: number[]): StreamingPlan | null {
   const week = snapshot.matchupWeek;
   const next = snapshot.nextMatchupWeek;
   const me = snapshot.teams.find((t) => t.id === snapshot.myTeamId);

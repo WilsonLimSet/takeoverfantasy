@@ -13,7 +13,7 @@ export interface MoveSide extends PlayerValue {
   name: string; team: string; pos: string; min: number | null; lastMin: number | null; pctOwned: number;
 }
 export type Verdict = "make" | "stream" | "close" | "keep";
-export interface MoveRating { drop: MoveSide; add: MoveSide; verdict: Verdict; headline: string; reasons: string[]; window: string }
+interface MoveRating { drop: MoveSide; add: MoveSide; verdict: Verdict; headline: string; reasons: string[]; window: string }
 
 const side = (p: Player, v: PlayerValue): MoveSide => ({
   ...v, name: p.name, team: p.team, pos: p.pos.join("/"),

@@ -13,7 +13,7 @@ import type { Flop, WaiverTake } from "./waiverTakes";
  * template, so it can't invent stats. Recent lines are passed in so it doesn't repeat itself.
  */
 
-export interface TakeCopy {
+interface TakeCopy {
   /** Punchline on the slide, a few words. */
   quip: string;
   /** One or two sentences under it on the slide. */
@@ -45,7 +45,7 @@ const copySchema = z.object({
   headlineId: z.number().describe("A different take for the stat-headline post, ideally a different verdict."),
   carouselCaption: z.string().describe("Caption for the carousel of all takes: a hook line, then one short line per player with the verdict, then a question."),
 });
-export type DayCopy = { takes: Record<number, TakeCopy>; photoId?: number; headlineId?: number; carouselCaption?: string };
+type DayCopy = { takes: Record<number, TakeCopy>; photoId?: number; headlineId?: number; carouselCaption?: string };
 
 function flopFacts(f: Flop): string {
   return [

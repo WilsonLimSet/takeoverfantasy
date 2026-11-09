@@ -7,8 +7,6 @@ import type {
   LeagueSnapshot,
   PlayerStatus,
   InjuryHistoryIndex,
-  PlayerInjuryHistory,
-  InjuryEvent,
   InjuryRiskAssessment,
   Player,
   NBATeamSchedule,
@@ -17,8 +15,6 @@ import type {
 // Statuses that count as "injured" (missing games)
 const INJURY_STATUSES: PlayerStatus[] = ['OUT', 'INJURY_RESERVE', 'SUSPENSION'];
 
-// DTD/Questionable may or may not play
-const QUESTIONABLE_STATUSES: PlayerStatus[] = ['DAY_TO_DAY', 'QUESTIONABLE'];
 
 /**
  * Estimate games missed based on days between injury start and end
@@ -188,21 +184,6 @@ export function getInjuryRiskAssessment(
   };
 }
 
-/**
- * Get injury risk for multiple players
- */
-export function getInjuryRiskForPlayers(
-  playerIds: number[],
-  history: InjuryHistoryIndex | null
-): Map<number, InjuryRiskAssessment> {
-  const risks = new Map<number, InjuryRiskAssessment>();
-
-  for (const playerId of playerIds) {
-    risks.set(playerId, getInjuryRiskAssessment(playerId, history));
-  }
-
-  return risks;
-}
 
 /**
  * Format injury risk for display

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { Headshot, InjuryBadge, TeamLogo } from '@/components/ui';
 import type { TradeFinder, TradeIdea, TradePlayer } from '@/lib/trades';
-import { Gate, Loading, Panel, useCached } from '../useMe';
+import { Gate, isGated, Loading, Panel, useCached } from '../useMe';
 
 type TradesResponse = Partial<TradeFinder> & {
   success: boolean;
@@ -151,7 +151,7 @@ function TradeBlock({ roster, saved, onSaved }: { roster: TradePlayer[]; saved: 
 export default function TradesPage() {
   const { data, reload } = useCached<TradesResponse>('/api/inseason/trades');
   if (!data) return <Loading what="trade ideas" />;
-  if (data.needs === 'signin' || data.needs === 'pro' || data.needs === 'connect') return <Gate needs={data.needs} />;
+  if (isGated(data.needs)) return <Gate needs={data.needs} />;
   if (!data.success || !data.ideas) return <Panel title="Trades"><p className="text-sm text-muted">{data.error ?? 'No data yet.'}</p></Panel>;
   const espn = (teamId: number) =>
     data.leagueId ? `https://fantasy.espn.com/basketball/team?leagueId=${data.leagueId}&teamId=${teamId}${data.seasonId ? `&seasonId=${data.seasonId}` : ''}` : undefined;

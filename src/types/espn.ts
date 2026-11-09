@@ -185,24 +185,6 @@ export interface ESPNLeagueSettings {
   };
 }
 
-export interface ESPNScheduleEntry {
-  id: number;
-  date: number;
-  awayProTeamId: number;
-  homeProTeamId: number;
-}
-
-export interface ESPNProTeamSchedule {
-  proTeamId: number;
-  proTeam: {
-    id: number;
-    abbrev: string;
-    location: string;
-    name: string;
-    byeWeek: number;
-  };
-  proGamesByScoringPeriod?: Record<string, ESPNScheduleEntry[]>;
-}
 
 // ESPN API Response types
 export interface ESPNLeagueResponse {

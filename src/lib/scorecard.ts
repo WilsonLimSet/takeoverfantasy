@@ -33,8 +33,8 @@ export async function savePicks(now = Date.now()): Promise<boolean> {
   return kv.claim(key(start), picks);
 }
 
-export interface SideResult { fppg: number; games: number; players: { id: number; name: string; fppg: number; games: number }[] }
-export interface Scorecard { week: number; pickedOn: string; complete: boolean; ours: SideResult; espn: SideResult }
+interface SideResult { fppg: number; games: number; players: { id: number; name: string; fppg: number; games: number }[] }
+interface Scorecard { week: number; pickedOn: string; complete: boolean; ours: SideResult; espn: SideResult }
 
 function side(list: Saved[], byId: Map<number, Player>): SideResult {
   const players = list.map((s) => {

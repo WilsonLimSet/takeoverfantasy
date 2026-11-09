@@ -6,7 +6,7 @@
  */
 const KEY = "cv.espnAuth";
 
-export interface EspnAuth { s2: string; swid: string }
+interface EspnAuth { s2: string; swid: string }
 
 export function getEspnAuth(): EspnAuth | null {
   try {

@@ -18,7 +18,7 @@ const HISTORY_EVERY_MS = 30 * 60 * 1000;
 /** Players off the report this long are forgotten. */
 const FORGET_AFTER_MS = 60 * 86_400_000;
 /** Stash candidates: back within this many days (longer ones are listed but not flagged). */
-export const STASH_WINDOW_DAYS = 45;
+const STASH_WINDOW_DAYS = 45;
 
 export interface InjuryReportEntry {
   status: string;
