@@ -64,10 +64,11 @@ export async function GET() {
   const plan = buildStreamingPlan(snapshot, ctx.core, watchlist?.playerIds ?? []);
   // Log today's ranked picks (first look of the day), then read back how past ones did.
   const kv = kvStore();
+  const at = { scope: ctx.storage.scope, leagueId: ctx.leagueId, seasonId: ctx.seasonId, teamId: ctx.myTeamId };
   const date = new Date(snapshot.fetchedAt).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
-  if (plan) await logPicks(kv, ctx.leagueId, ctx.seasonId, ctx.myTeamId, date, plan).catch((e) => console.warn('[moves] log picks', e));
+  if (plan) await logPicks(kv, at, date, plan).catch((e) => console.warn('[moves] log picks', e));
   const [record, overall] = await Promise.all([
-    trackRecord(kv, ctx.leagueId, ctx.seasonId, ctx.myTeamId).catch(() => null),
+    trackRecord(kv, at).catch(() => null),
     overallRecord(kv).catch(() => null),
   ]);
   const me = snapshot.teams.find((t) => t.id === snapshot.myTeamId);

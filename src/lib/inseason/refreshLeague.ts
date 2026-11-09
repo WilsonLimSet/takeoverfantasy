@@ -65,7 +65,8 @@ export async function refreshLeague(ctx: LeagueContext): Promise<RefreshedLeague
   // Game logs for the players a pick can involve: both rosters in my matchup, the best free
   // agents, and anyone in a logged pick still waiting for a grade. Ranges and grades only.
   const kv = kvStore();
-  const pending = await pendingPickIds(kv, ctx.leagueId, ctx.seasonId, ctx.myTeamId).catch(() => [] as number[]);
+  const at = { scope: ctx.storage.scope, leagueId: ctx.leagueId, seasonId: ctx.seasonId, teamId: ctx.myTeamId };
+  const pending = await pendingPickIds(kv, at).catch(() => [] as number[]);
   const game = snapshot.matchups.find((m) => m.isMyMatchup && m.week === snapshot.week);
   const sides = new Set([ctx.myTeamId, game?.homeTeamId, game?.awayTeamId]);
   const ids = [
@@ -78,7 +79,7 @@ export async function refreshLeague(ctx: LeagueContext): Promise<RefreshedLeague
     return undefined;
   });
   if (snapshot.gameLogs && pending.length) {
-    await gradePicks(kv, ctx.leagueId, ctx.seasonId, ctx.myTeamId, currentPeriod(snapshot), snapshot.gameLogs).catch((e) => console.warn('[refreshLeague] grading failed:', e));
+    await gradePicks(kv, at, currentPeriod(snapshot), snapshot.gameLogs).catch((e) => console.warn('[refreshLeague] grading failed:', e));
   }
 
   const { storage, leagueId, seasonId } = ctx;

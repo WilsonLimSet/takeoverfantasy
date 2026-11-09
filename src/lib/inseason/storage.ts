@@ -113,12 +113,15 @@ export interface StorageAdapter {
   getInjuryHistory(leagueId: number, seasonId: number): Promise<InjuryHistoryIndex | null>;
   storeWatchlist(leagueId: number, seasonId: number, watchlist: Watchlist): Promise<void>;
   getWatchlist(leagueId: number, seasonId: number): Promise<Watchlist | null>;
+  /** This user's key scope ('' for the owner's env league), for data kept outside the adapter (pickLog.ts). */
+  scope: string;
 }
 
 function adapter(kv: KV, scope: string): StorageAdapter {
   // The owner's league keeps its original unscoped keys; each user's copy lives under their scope.
   const k = (leagueId: number, seasonId: number, name: string) => `${scope}${leagueId}:${seasonId}:${name}`;
   return {
+    scope,
     // Only the latest and previous snapshots are ever read, so that's all we keep.
     async storeSnapshot(snapshot) {
       const latest = await kv.get<LeagueSnapshot>(k(snapshot.leagueId, snapshot.seasonId, 'latest'));

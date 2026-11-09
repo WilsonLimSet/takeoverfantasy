@@ -33,7 +33,12 @@ export interface PickRecord {
   actual?: Record<number, number>;
 }
 
-const prefix = (leagueId: number, seasonId: number, teamId: number) => `picks:${leagueId}:${seasonId}:${teamId}:`;
+/**
+ * Where a team's picks live: one per user scope (the storage adapter's), so two people looking at
+ * the same team (a guest picking someone else's team in a public league) never share a record.
+ */
+export interface PickScope { scope: string; leagueId: number; seasonId: number; teamId: number }
+const prefix = ({ scope, leagueId, seasonId, teamId }: PickScope) => `picks:${scope}${leagueId}:${seasonId}:${teamId}:`;
 
 const counted = (days: { counts: boolean }[], periods: number[]) => periods.filter((_, i) => days[i]?.counts);
 
@@ -64,21 +69,21 @@ export function picksFromPlan(plan: StreamingPlan): PickGroup[] {
 }
 
 /** Log today's choices once: the first look of the day is what we stand by. */
-export async function logPicks(kv: KV, leagueId: number, seasonId: number, teamId: number, date: string, plan: StreamingPlan): Promise<void> {
+export async function logPicks(kv: KV, at: PickScope, date: string, plan: StreamingPlan): Promise<void> {
   const groups = picksFromPlan(plan);
   if (!groups.length) return;
-  await kv.claim<PickRecord>(`${prefix(leagueId, seasonId, teamId)}${date}`, { date, week: plan.week, mode: plan.mode.kind, groups });
+  await kv.claim<PickRecord>(`${prefix(at)}${date}`, { date, week: plan.week, mode: plan.mode.kind, groups });
 }
 
 /** Ungraded records' player ids, so the refresh can fetch their game logs. */
-export async function pendingPickIds(kv: KV, leagueId: number, seasonId: number, teamId: number): Promise<number[]> {
-  const recs = await kv.list<PickRecord>(prefix(leagueId, seasonId, teamId)).catch(() => []);
+export async function pendingPickIds(kv: KV, at: PickScope): Promise<number[]> {
+  const recs = await kv.list<PickRecord>(prefix(at)).catch(() => []);
   return recs.filter((r) => !r.actual).flatMap((r) => r.groups.flatMap((g) => g.picks.map((p) => p.id)));
 }
 
 /** Grade every record whose games are all played (before the current scoring period). */
-export async function gradePicks(kv: KV, leagueId: number, seasonId: number, teamId: number, today: number, logs: Record<number, GameLog>): Promise<number> {
-  const recs = await kv.list<PickRecord>(prefix(leagueId, seasonId, teamId));
+export async function gradePicks(kv: KV, at: PickScope, today: number, logs: Record<number, GameLog>): Promise<number> {
+  const recs = await kv.list<PickRecord>(prefix(at));
   let graded = 0;
   for (const r of recs) {
     if (r.actual) continue;
@@ -87,7 +92,7 @@ export async function gradePicks(kv: KV, leagueId: number, seasonId: number, tea
     // A player with no log at all (ESPN didn't return him) can't be graded yet.
     if (picks.some((p) => !logs[p.id])) continue;
     r.actual = Object.fromEntries(picks.map((p) => [p.id, Math.round(pointsIn(logs[p.id], p.periods))]));
-    await kv.set(`${prefix(leagueId, seasonId, teamId)}${r.date}`, r);
+    await kv.set(`${prefix(at)}${r.date}`, r);
     graded++;
   }
   return graded;
@@ -126,8 +131,8 @@ export function summarize(recs: PickRecord[]): PickTrackRecord {
   return out;
 }
 
-export async function trackRecord(kv: KV, leagueId: number, seasonId: number, teamId: number): Promise<PickTrackRecord> {
-  return summarize(await kv.list<PickRecord>(prefix(leagueId, seasonId, teamId)).catch(() => []));
+export async function trackRecord(kv: KV, at: PickScope): Promise<PickTrackRecord> {
+  return summarize(await kv.list<PickRecord>(prefix(at)).catch(() => []));
 }
 
 /** Every league's record together, for the public number. */
