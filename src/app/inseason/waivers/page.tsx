@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Headshot, InjuryBadge, TeamLogo } from '@/components/ui';
 import type { MovesResponse } from '../MovesPanel';
 import { Gate, Loading, MOVES_URL, Panel, useCached } from '../useMe';
+import { RotationPanel } from '../RotationPanel';
 
 /** Free agents ranked by what each would add to this week's lineup, not just by projection. */
 export default function FreeAgentsPage() {
@@ -16,6 +17,8 @@ export default function FreeAgentsPage() {
 
   const rows = data.plan.freeAgents.filter((f) => !hideWaivers || !f.player.onWaivers);
   return (
+    <>
+    <RotationPanel />
     <Panel
       title="Free agents"
       sub={`Ranked by the points each adds to your lineup over the ${data.plan.daysLeft} days left, swapped for your weakest streaming spot.`}
@@ -76,5 +79,6 @@ export default function FreeAgentsPage() {
         </table>
       </div>
     </Panel>
+    </>
   );
 }

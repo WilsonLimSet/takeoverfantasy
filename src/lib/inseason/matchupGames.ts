@@ -3,6 +3,7 @@
  * How many games each player plays in the current matchup week, for both sides of the matchup.
  */
 
+import { NBA_TEAMS } from './espnClient';
 import type {
   LeagueSnapshot,
   MatchupGamesComparison,
@@ -196,6 +197,9 @@ export function compareMatchupGames(snapshot: LeagueSnapshot): MatchupGamesCompa
     week: snapshot.week,
     days: week.days,
     teamsPlaying: week.days.map((d) => Object.values(week.teamGames).filter((g) => g.includes(d.scoringPeriodId)).length),
+    teams: Object.entries(week.teamGames)
+      .filter(([id]) => NBA_TEAMS[Number(id)])
+      .map(([id, g]) => ({ abbrev: NBA_TEAMS[Number(id)].abbrev, byDay: week.days.map((d) => g.includes(d.scoringPeriodId)), next: snapshot.nextMatchupWeek?.teamGames[Number(id)]?.length })),
     today,
     startingSlots: slots,
     me: sideGames(me, week, today, slots, lineup, snapshot.injuries, asOf),

@@ -385,7 +385,7 @@ export interface BoxLine extends Hero { min: number; fg: string; tov: number }
  * Every player's fantasy line on a US date, from ESPN's box scores. Only finished games count:
  * a live game's line looks final but isn't.
  */
-export async function boxLines(date: string): Promise<{ date: string; games: number; lines: BoxLine[] }> {
+export async function boxLines(date: string): Promise<{ date: string; games: number; lines: BoxLine[]; dnp: Record<number, string> }> {
   const get = async (url: string) => {
     const r = await fetch(url, { headers: { Accept: "application/json" }, next: { revalidate: 600 } });
     if (!r.ok) throw new Error(`ESPN ${url}: ${r.status}`);
@@ -394,10 +394,12 @@ export async function boxLines(date: string): Promise<{ date: string; games: num
   const board = await get(`${NBA}/scoreboard?dates=${date.replace(/-/g, "")}`);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const done = ((board?.events ?? []) as any[]).filter((e) => e?.status?.type?.completed).map((e) => String(e.id));
-  if (!done.length) return { date, games: 0, lines: [] };
+  if (!done.length) return { date, games: 0, lines: [], dnp: {} };
   const [{ players }, boxes] = await Promise.all([getPlayers(), Promise.all(done.map((id) => get(`${NBA}/summary?event=${id}`).catch(() => null)))]);
   const owned = new Map(players.map((p) => [p.id, p.pctOwned ?? 0]));
   const lines: BoxLine[] = [];
+  // Who sat and why ("COACH'S DECISION" vs an injury), so the rotation watch can tell a benching from a sprain.
+  const dnp: Record<number, string> = {};
   for (const box of boxes) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     for (const side of (box?.boxscore?.players ?? []) as any[]) {
@@ -405,8 +407,11 @@ export async function boxLines(date: string): Promise<{ date: string; games: num
       const keys: string[] = st?.keys ?? [];
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       for (const a of (st?.athletes ?? []) as any[]) {
-        if (a.didNotPlay || !a.stats?.length) continue;
         const id = Number(a.athlete?.id);
+        if (a.didNotPlay || !a.stats?.length) {
+          if (id) dnp[id] = String(a.reason ?? "");
+          continue;
+        }
         const v = (k: string) => a.stats[keys.indexOf(k)] ?? "0";
         const split = (k: string) => v(k).split("-").map(Number);
         const [fgm, fga] = split("fieldGoalsMade-fieldGoalsAttempted"), [tpm] = split("threePointFieldGoalsMade-threePointFieldGoalsAttempted"), [ftm, fta] = split("freeThrowsMade-freeThrowsAttempted");
@@ -422,7 +427,7 @@ export async function boxLines(date: string): Promise<{ date: string; games: num
       }
     }
   }
-  return { date, games: done.length, lines };
+  return { date, games: done.length, lines, dnp };
 }
 
 /** The best fantasy games on a US date from players under 50% rostered. */

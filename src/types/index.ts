@@ -250,6 +250,8 @@ export interface MatchupGamesComparison {
   days: Array<{ scoringPeriodId: number; date: string }>;
   /** NBA teams playing each day (0 on days without games). */
   teamsPlaying?: number[];
+  /** Every NBA team's games this week (one flag per day) and games next matchup week. */
+  teams?: Array<{ abbrev: string; byDay: boolean[]; next?: number }>;
   today: number;
   startingSlots: number;
   me: MatchupSideGames;

@@ -233,6 +233,7 @@ export async function pushSocial(now = Date.now()): Promise<{ sent: string[]; fa
         await kv.set(`social:minutes:${night}`, Object.fromEntries(b.lines.map((l) => [l.id, l.min])));
         // Fantasy points too, so usage (points per minute with and without a teammate) can be measured.
         await kv.set(`social:fpts:${night}`, Object.fromEntries(b.lines.map((l) => [l.id, l.fpts])));
+        await kv.set(`social:dnp:${night}`, b.dnp);
         await scorePredictions(night, b.lines).catch((e) => console.error("[social] score", e));
       }
     }

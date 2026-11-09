@@ -7,6 +7,8 @@ import { useCallback, useEffect, useState } from 'react';
 import type { DailyBriefing } from '@/types';
 import { InjuryBadge } from '@/components/ui';
 import { BridgePanel, EdgeCard, TrackRecordPanel, MatchupGamesPanel, MoveRow, StatStrip, WatchlistPanel, type MovesPreview, type MovesResponse } from './MovesPanel';
+import { SchedulePanel } from './SchedulePanel';
+import { RotationPanel } from './RotationPanel';
 import { ErrorBox, formatAge, Gate, invalidateCached, Loading, MOVES_URL, Panel, SaveLeague, useCached, useMeContext } from './useMe';
 
 function RosterAlerts({ briefing }: { briefing: DailyBriefing }) {
@@ -168,6 +170,7 @@ export default function ThisWeekPage() {
               </Link>
             </p>
           </Panel>
+          {mg && <SchedulePanel data={mg} plan={plan} />}
           {me?.profile && !me.profile.telegram && me.telegramBot && (
             <Link href="/inseason/connect#alerts" className="flex items-center justify-between gap-3 rounded-xl border border-line bg-panel px-4 py-3 text-sm shadow-[0_1px_2px_rgba(25,25,25,0.04)] hover:border-fg/30">
               <span><span className="font-medium">Get these moves on Telegram each morning.</span> <span className="text-muted">Takes 10 seconds.</span></span>
@@ -179,6 +182,7 @@ export default function ThisWeekPage() {
         </div>
         <div className="space-y-5">
           {briefing && <RosterAlerts briefing={briefing} />}
+          <RotationPanel compact />
           {plan.pointsLeague && <TrackRecordPanel record={moves.record} overall={moves.overall} />}
           <WatchlistPanel notes={plan.watchlist} />
         </div>
