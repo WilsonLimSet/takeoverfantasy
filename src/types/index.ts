@@ -195,7 +195,7 @@ export interface LeagueSnapshot {
   /** ESPN lineup slot id -> how many the league has. */
   lineupSlots?: Record<string, number>;
   /** Pickups allowed this matchup (null = unlimited) and how many my team has used. */
-  acquisitions?: { limit: number | null; used: number };
+  acquisitions?: { limit: number | null; used: number; /** Every team's pickups used this matchup, by team id. */ byTeam?: Record<number, number> };
   /** Points (H2H_POINTS etc.) or categories league. */
   scoringType?: string;
   /** ESPN's estimated return dates (YYYY-MM-DD) for injured players, by player id. */
@@ -250,6 +250,8 @@ export interface MatchupGamesComparison {
   days: Array<{ scoringPeriodId: number; date: string }>;
   /** NBA teams playing each day (0 on days without games). */
   teamsPlaying?: number[];
+  /** Every NBA team's games this week (one flag per day) and games next matchup week. */
+  teams?: Array<{ abbrev: string; byDay: boolean[]; next?: number }>;
   today: number;
   startingSlots: number;
   me: MatchupSideGames;

@@ -389,15 +389,16 @@ export function buildLeagueSnapshot(input: SnapshotInput): LeagueSnapshot {
 }
 
 /** Pickup limit for this matchup and how many my team has used. */
-function acquisitionsThisWeek(input: SnapshotInput): { limit: number | null; used: number } {
+function acquisitionsThisWeek(input: SnapshotInput): { limit: number | null; used: number; byTeam: Record<number, number> } {
   const acq = input.settings.settings?.acquisitionSettings;
   const period = input.settings.currentMatchupPeriod;
   const days = Math.max(1, input.settings.settings?.scheduleSettings?.matchupPeriods?.[String(period)]?.length ?? 7);
   const raw = acq?.matchupAcquisitionLimit ?? -1;
   let limit: number | null = null;
   if (raw > 0) limit = acq?.matchupLimitPerScoringPeriod ? Math.round(raw * (days > 1 ? days : 7)) : Math.round(raw);
+  const usedBy = (t: (typeof input.teams)[number]) => t.transactionCounter?.matchupAcquisitionTotals?.[String(period)] ?? 0;
   const me = input.teams.find((t) => t.id === input.myTeamId);
-  return { limit, used: me?.transactionCounter?.matchupAcquisitionTotals?.[String(period)] ?? 0 };
+  return { limit, used: me ? usedBy(me) : 0, byTeam: Object.fromEntries(input.teams.map((t) => [t.id, usedBy(t)])) };
 }
 
 // ============ Diff Calculation ============
