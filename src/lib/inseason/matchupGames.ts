@@ -94,10 +94,13 @@ export function buildNextMatchupWeek(
  * on a day with no games (or before ESPN rolls over) its period is already over: the first day of
  * the week dated today or later counts as today instead.
  */
-export function currentPeriod(snapshot: Pick<LeagueSnapshot, 'scoringPeriodId' | 'matchupWeek' | 'fetchedAt'>): number {
+export function currentPeriod(snapshot: Pick<LeagueSnapshot, 'scoringPeriodId' | 'matchupWeek' | 'fetchedAt' | 'dayDone'>): number {
   const asOf = easternDate(snapshot.fetchedAt);
-  const next = snapshot.matchupWeek?.days.find((d) => d.scoringPeriodId >= snapshot.scoringPeriodId && d.date >= asOf);
-  return next ? next.scoringPeriodId : snapshot.scoringPeriodId;
+  // Once every game today is final, today is over too: its points are already in the score.
+  const next = snapshot.matchupWeek?.days.find((d) => d.scoringPeriodId >= snapshot.scoringPeriodId && d.date >= asOf && d.date !== snapshot.dayDone);
+  if (next) return next.scoringPeriodId;
+  const last = snapshot.matchupWeek?.days.at(-1);
+  return last && last.date === snapshot.dayDone ? last.scoringPeriodId + 1 : snapshot.scoringPeriodId;
 }
 
 /** Starting lineup spots: every slot except bench and IR. */

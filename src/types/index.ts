@@ -200,6 +200,16 @@ export interface LeagueSnapshot {
   scoringType?: string;
   /** ESPN's estimated return dates (YYYY-MM-DD) for injured players, by player id. */
   injuries?: Record<number, { returnDate?: string }>;
+  /** Recent games' fantasy points under this league's scoring, by player id (gameLogs.ts). */
+  gameLogs?: Record<number, GameLog>;
+  /** A date (YYYY-MM-DD, US Eastern) whose NBA games were all final at fetch time. */
+  dayDone?: string;
+}
+
+/** A player's recent games: this season as [scoringPeriodId, points], newest first; last season's points. */
+export interface GameLog {
+  cur: [number, number][];
+  prev: number[];
 }
 
 export interface MatchupWeekSchedule {
