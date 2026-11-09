@@ -79,10 +79,10 @@ function DayStrip({ days, tone }: { days: MoveDay[]; tone: 'add' | 'drop' }) {
   return (
     <div className="mt-1.5 flex gap-1 pl-[46px]" aria-label={tone === 'add' ? 'Games that count' : 'Games you give up'}>
       {days.map((d) => (
-        <div key={d.date} className="flex w-6 flex-col items-center gap-0.5" title={`${dayLabel(d.date)}: ${d.counts ? (tone === 'add' ? 'starts' : 'you lose this game') : d.game ? 'plays, but your lineup is full' : 'no game'}`}>
+        <div key={d.date} className="flex w-6 flex-col items-center gap-0.5" title={`${dayLabel(d.date)}: ${d.kept ? 'still plays for you before the swap' : d.counts ? (tone === 'add' ? 'starts' : 'you lose this game') : d.game ? 'plays, but your lineup is full' : 'no game'}`}>
           <span
             className={`inline-block h-2 w-2 rounded-full ${
-              d.counts ? (tone === 'add' ? 'bg-accent' : 'bg-red-700') : d.game ? 'border border-muted' : 'bg-line/60'
+              d.kept ? 'bg-fg' : d.counts ? (tone === 'add' ? 'bg-accent' : 'bg-red-700') : d.game ? 'border border-muted' : 'bg-line/60'
             }`}
           />
           <span className="text-[9px] uppercase tracking-wide text-muted">{dayLabel(d.date).slice(0, 2)}</span>
@@ -248,6 +248,11 @@ export function MoveRow({ m, mode }: { m: StreamMove; mode?: StreamingPlan['mode
         {m.reason}
       </p>
       {m.hold && <p className="mt-1 text-xs font-medium text-fg">{m.hold}</p>}
+      {m.altDrop && (
+        <p className="mt-1 text-xs text-muted">
+          Why {m.drop.name}: he costs you the least. Dropping {m.altDrop.name} instead adds +{Math.round(m.altDrop.pointsGain)}{m.altDrop.pointsGain >= m.pointsGain - 0.5 ? ', about the same' : ''}.
+        </p>
+      )}
       {m.add.range && <p className="mt-1 text-xs text-muted">{m.add.name}: {rangeText(m.add.range).replace(/^U/, 'u')}.</p>}
       {m.runnerUp && m.runnerUp.pointsGain > m.pointsGain + 0.5 ? (
         <p className="mt-1 text-xs text-muted">

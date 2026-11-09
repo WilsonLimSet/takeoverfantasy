@@ -117,10 +117,18 @@ export interface StreamMove {
   runnerUp?: { id: number; name: string; fppg: number; pointsGain: number; periods: number[] };
   /** The runner-up is about as good: either is a fine pick. */
   close?: boolean;
+  /** The next-cheapest player to drop for this pickup, and what the move adds then. */
+  altDrop?: { name: string; pointsGain: number };
 }
 
 /** One day of a move's strip: game = his team plays and he's on your roster; counts = he starts. */
-export interface MoveDay { date: string; game: boolean; counts: boolean }
+export interface MoveDay {
+  date: string;
+  game: boolean;
+  counts: boolean;
+  /** Drop side only: he still plays this one for you, before the swap. */
+  kept?: boolean;
+}
 
 /** The matchup's projected final score: points so far plus the best lineups for the days left. */
 export interface MatchupProjection {
@@ -584,7 +592,8 @@ export function buildStreamingPlan(snapshot: LeagueSnapshot, core: number[], wat
     // Lost: games he'd have started, from the day he's gone.
     const dropDays = left.map((d) => {
       const gone = d.scoringPeriodId >= s.swapDay;
-      return { date: d.date, game: gone && plays(s.drop, d.scoringPeriodId), counts: gone && !!s.before.startedByDay.get(d.scoringPeriodId)?.has(s.drop.player.id) };
+      const his = plays(s.drop, d.scoringPeriodId);
+      return { date: d.date, game: gone && his, counts: gone && !!s.before.startedByDay.get(d.scoringPeriodId)?.has(s.drop.player.id), kept: !gone && his };
     });
     const startedIn = (r: WeekResult, id: number) => [...r.startedByDay].filter(([, ids]) => ids.has(id)).map(([p]) => p).sort((a, b) => a - b);
     const second = s.second;
@@ -627,7 +636,12 @@ export function buildStreamingPlan(snapshot: LeagueSnapshot, core: number[], wat
     while (found.length < maxMoves) {
       const s = bestSwap(current, drops, adds);
       if (!s || s.gain < minGain) break;
-      found.push(toMove(s));
+      const move = toMove(s);
+      // The same pickup with the next-best drop, so the choice of drop isn't a mystery.
+      const pickup = adds.find((c) => c.player.id === s.add.player.id);
+      const alt = pickup && bestSwap(current, drops.filter((c) => c.player.id !== s.drop.player.id), [pickup]);
+      if (alt && alt.gain > 0) move.altDrop = { name: alt.drop.player.name, pointsGain: Math.round(alt.gain * 10) / 10 };
+      found.push(move);
       current = s.roster;
       drops = drops.filter((c) => c.player.id !== s.drop.player.id);
       adds = adds.filter((c) => c.player.id !== s.add.player.id);

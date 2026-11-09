@@ -154,7 +154,7 @@ export default function ThisWeekPage() {
         <div className="space-y-5">
           <Panel
             title="Why these moves"
-            sub={plan.moves.length ? `Each move assumes the ones above it are made. Dots: days his game makes your lineup.${plan.mode?.note && plan.mode.kind !== 'even' ? ` ${plan.mode.note}` : ''}` : undefined}
+            sub={plan.moves.length ? `Each move assumes the ones above it are made. Dots: green, his game makes your lineup; red, a game you give up; black, the dropped player still plays it for you before the swap; hollow, plays but your lineup is full.${plan.mode?.note && plan.mode.kind !== 'even' ? ` ${plan.mode.note}` : ''}` : undefined}
           >
             {plan.moves.length ? (
               plan.moves.map((m) => <MoveRow key={m.add.id} m={m} mode={plan.mode?.kind} />)
