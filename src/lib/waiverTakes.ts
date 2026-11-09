@@ -51,7 +51,7 @@ export interface Flop {
 }
 
 /** The day's takes plus the editor's picks: which take leads the photo post and which the headline. */
-export interface TakesDay { takes: WaiverTake[]; photoId?: number; headlineId?: number; carouselCaption?: string; flop?: Flop }
+interface TakesDay { takes: WaiverTake[]; photoId?: number; headlineId?: number; carouselCaption?: string; flop?: Flop }
 
 /** Players rostered in about this many leagues of ten teams count as roster-worthy (ESPN rosters 13). */
 const ROSTERED = 120;

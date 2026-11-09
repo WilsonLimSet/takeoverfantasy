@@ -46,7 +46,7 @@ export const deleteProfile = (email: string) => kvStore().delete(profileKey(emai
 export const listProfiles = () => kvStore().list<InseasonProfile>('profile:');
 
 /** Storage scope for a user's league data (keeps the email out of the keys). */
-export const profileScope = (email: string) => `u_${createHash('sha256').update(email.toLowerCase()).digest('hex').slice(0, 16)}`;
+const profileScope = (email: string) => `u_${createHash('sha256').update(email.toLowerCase()).digest('hex').slice(0, 16)}`;
 
 // ============ Cookie encryption ============
 
@@ -151,7 +151,7 @@ export async function withAccess<T extends { email: string }>(profiles: T[]): Pr
   return out;
 }
 
-export type ContextResult =
+type ContextResult =
   | { ok: true; ctx: LeagueContext }
   | { ok: false; status: 401 | 402 | 404; error: string };
 

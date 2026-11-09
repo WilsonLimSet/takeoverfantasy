@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Headshot, InjuryBadge, TeamLogo } from '@/components/ui';
 import type { StashList, StashPlayer } from '@/lib/inseason/stash';
-import { Gate, Loading, Panel, useCached } from '../useMe';
+import { Gate, isGated, Loading, Panel, useCached } from '../useMe';
 
 type StashResponse = Partial<StashList> & { success: boolean; error?: string; needs?: 'signin' | 'pro' | 'connect' };
 
@@ -70,7 +70,7 @@ function Row({ p }: { p: StashPlayer }) {
 export default function StashPage() {
   const { data } = useCached<StashResponse>('/api/inseason/stash');
   if (!data) return <Loading what="injured free agents" />;
-  if (data.needs === 'signin' || data.needs === 'pro' || data.needs === 'connect') return <Gate needs={data.needs} />;
+  if (isGated(data.needs)) return <Gate needs={data.needs} />;
   if (!data.players) return <Panel title="Injured stash"><p className="text-sm text-muted">{data.error ?? 'No data yet.'}</p></Panel>;
 
   const soon = data.players.filter((p) => !p.longTerm);

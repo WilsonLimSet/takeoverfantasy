@@ -32,6 +32,8 @@ function Post({ title, img, caption, file }: { title: string; img: string; capti
 export default async function Studio() {
   if (!(await isOwner())) notFound();
   const night = yesterday();
+  // A server component rendered per request (force-dynamic): reading the clock here is fine.
+  // eslint-disable-next-line react-hooks/purity
   const today = easternDate(Date.now());
   const [news, movers, schedule, card, heroes, daily] = await Promise.all([
     newsAlerts(8).catch(() => []),

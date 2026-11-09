@@ -18,8 +18,8 @@ export interface League {
   bench: number;
 }
 
-export const ESPN_SLOTS: Record<Slot, number> = { PG: 1, SG: 1, SF: 1, PF: 1, C: 1, G: 1, F: 1, UT: 3 };
-export const YAHOO_SLOTS: Record<Slot, number> = { PG: 1, SG: 1, SF: 1, PF: 1, C: 2, G: 1, F: 1, UT: 2 };
+const ESPN_SLOTS: Record<Slot, number> = { PG: 1, SG: 1, SF: 1, PF: 1, C: 1, G: 1, F: 1, UT: 3 };
+const YAHOO_SLOTS: Record<Slot, number> = { PG: 1, SG: 1, SF: 1, PF: 1, C: 2, G: 1, F: 1, UT: 2 };
 
 export const NINE_CAT: Cat[] = ["fg%", "ft%", "tpm", "pts", "reb", "ast", "stl", "blk", "tov"];
 
@@ -132,7 +132,7 @@ export interface Projection {
  * actual production (regressed), then apply a durability-aware games estimate.
  * In-season, current stats get blended in proportionally to games played.
  */
-export function project(p: Player, take?: Take | null): Projection | null {
+function project(p: Player, take?: Take | null): Projection | null {
   const { proj, cur } = p;
   const lastGp = p.last?.gp ?? 0;
   // A handful of games (or a lost season) says nothing about per-game production.

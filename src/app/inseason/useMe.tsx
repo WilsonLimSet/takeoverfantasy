@@ -5,7 +5,6 @@ import { funnel } from '@/components/funnel';
 import Link from 'next/link';
 import { Skeleton, SkeletonRows } from '@/components/ui';
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore } from 'react';
-import { supabaseBrowser } from '@/lib/supabase/browser';
 import { AUTH_ON } from '@/lib/supabase/env';
 
 export interface MeProfile {
@@ -73,7 +72,6 @@ export function MeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!me?.profile && !me?.guest) return;
     loadCached(MOVES_URL);
-    loadCached('/api/inseason/weekly-plan');
   }, [me?.profile, me?.guest]);
   return <MeContext.Provider value={{ me, reload }}>{children}</MeContext.Provider>;
 }
@@ -145,6 +143,7 @@ const notify = () => listeners.forEach((l) => l());
 const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l); }; };
 
 /** Fetch an API response into the cache (one request at a time per URL). */
+/** Load a URL into the cache (no-op while fresh). Also used to warm a tab's data on hover. */
 export function loadCached(url: string, force = false): Promise<void> {
   const e = entry(url) ?? { at: 0 };
   cache.set(url, e);
@@ -179,6 +178,7 @@ export function useCached<T>(url: string | null): { data: T | null; reload: () =
 }
 
 export const MOVES_URL = '/api/inseason/moves';
+export const ROTATION_URL = '/api/inseason/rotation';
 
 // ============ Shared bits, styled like the draft kit ============
 
@@ -262,7 +262,11 @@ function PlanCard({ href, name, price, note, fine, strong }: { href: string; nam
 }
 
 /** What to show instead of the tools: sign in, upgrade, or connect a league. */
-export function Gate({ needs }: { needs: 'signin' | 'pro' | 'connect' }) {
+type GateNeeds = 'signin' | 'pro' | 'connect';
+/** A response that needs sign-in, a pass or a league before it can show anything. */
+export const isGated = (needs?: string): needs is GateNeeds => needs === 'signin' || needs === 'pro' || needs === 'connect';
+
+export function Gate({ needs }: { needs: GateNeeds }) {
   const { me, reload } = useMeContext();
   // Back from Stripe while Stripe couldn't confirm the payment: say so instead of asking again.
   const [unlock, setUnlock] = useState<string | null>(null);
@@ -348,7 +352,7 @@ export function SaveLeague({ next = '/inseason/connect#alerts', compact }: { nex
   const send = async (e: React.FormEvent) => {
     e.preventDefault();
     setState('sending');
-    const { error } = await supabaseBrowser().auth.signInWithOtp({ email: email.trim(), options: { emailRedirectTo: signInCallback(next) } });
+    const { error } = await (await import('@/lib/supabase/browser')).supabaseBrowser().auth.signInWithOtp({ email: email.trim(), options: { emailRedirectTo: signInCallback(next) } });
     if (error) { setState('error'); setMsg(error.message); return; }
     setState('sent');
     track('save_league_email');

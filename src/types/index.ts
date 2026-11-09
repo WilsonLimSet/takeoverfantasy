@@ -120,27 +120,6 @@ export interface WaiverRecommendation {
   confidence: 'HIGH' | 'MEDIUM' | 'LOW';
 }
 
-// Streaming plan entry
-export interface StreamingSlot {
-  date: string;
-  dayOfWeek: string;
-  recommendedAdd?: Player;
-  recommendedDrop?: Player;
-  reason: string;
-  gamesGained: number;
-}
-
-export interface WeeklyStreamingPlan {
-  week: number;
-  weekStartDate: string;
-  weekEndDate: string;
-  totalGamesWithStreaming: number;
-  totalGamesWithoutStreaming: number;
-  gamesGained: number;
-  addsRemaining: number;
-  addsUsed: number;
-  plan: StreamingSlot[];
-}
 
 // Injury opportunity
 export interface InjuryOpportunity {
@@ -267,24 +246,8 @@ export interface SnapshotDiff {
   significantChanges: boolean;
 }
 
-// Telegram message types
-export type AlertType =
-  | 'STATUS_CHANGE'
-  | 'WAIVER_ALERT'
-  | 'INJURY_OPPORTUNITY'
-  | 'WEEKLY_PLAN_UPDATE'
-  | 'DAILY_BRIEFING';
-
-export interface TelegramAlert {
-  type: AlertType;
-  title: string;
-  message: string;
-  timestamp: number;
-  priority: 'HIGH' | 'MEDIUM' | 'LOW';
-}
-
 // Injury History Tracking
-export interface InjuryEvent {
+interface InjuryEvent {
   startDate: number;      // timestamp when injury started
   endDate?: number;       // timestamp when returned (undefined if still injured)
   status: PlayerStatus;   // OUT, IR, DTD, etc.
@@ -351,17 +314,6 @@ export interface SmartAlert {
   timestamp: number;
 }
 
-// Teammate usage opportunity when star is injured
-export interface UsageOpportunity {
-  injuredStar: Player;
-  injuryStatus: PlayerStatus;
-  beneficiaries: Array<{
-    player: Player;
-    isOnMyRoster: boolean;
-    isOnWatchlist: boolean;
-    usageBoostReason: string;
-  }>;
-}
 
 // League transaction (add/drop by other teams)
 export interface LeagueTransaction {

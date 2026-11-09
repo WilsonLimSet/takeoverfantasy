@@ -16,7 +16,7 @@ const GROUPS: Record<string, string[]> = { Guards: ["PG", "SG"], Forwards: ["SF"
 const DAY = 864e5;
 
 /** Today through the end of next matchup week (or about 10 days when the schedule isn't loaded). */
-export function backupWindow(snapshot: LeagueSnapshot | null, now = Date.now()): { from: string; to: string } {
+function backupWindow(snapshot: LeagueSnapshot | null, now = Date.now()): { from: string; to: string } {
   const from = easternDate(now);
   const days = snapshot?.nextMatchupWeek?.days ?? snapshot?.matchupWeek?.days;
   return { from, to: days?.length ? days[days.length - 1].date : easternDate(now + 10 * DAY) };

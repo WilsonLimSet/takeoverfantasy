@@ -30,7 +30,7 @@ export class EspnLeagueError extends Error {
   constructor(message: string, public status: number) { super(message); }
 }
 
-export interface EspnAuth { s2: string; swid: string }
+interface EspnAuth { s2: string; swid: string }
 
 /**
  * A visitor's ESPN login cookies, sent by our own client as headers for a private league. They are
@@ -108,7 +108,7 @@ export async function fetchLeague(leagueId: string, season: number, views: strin
   }
 }
 
-export interface DraftSync {
+interface DraftSync {
   leagueId: string;
   season: number;
   drafted: boolean;

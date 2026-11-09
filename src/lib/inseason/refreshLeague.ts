@@ -17,7 +17,7 @@ import { kvStore } from './storage';
 import type { LeagueContext } from './profile';
 import type { LeagueSnapshot, LeagueTransaction, SnapshotDiff, Watchlist } from '@/types';
 
-export interface RefreshedLeague {
+interface RefreshedLeague {
   snapshot: LeagueSnapshot;
   diff: SnapshotDiff;
   /** The user's ESPN watchlist. */
@@ -108,16 +108,39 @@ export async function refreshLeague(ctx: LeagueContext): Promise<RefreshedLeague
 }
 
 /** Older than this, a page view reloads the league from ESPN (free) instead of waiting for the cron. */
-export const VIEW_REFRESH_MS = 30 * 60 * 1000;
+const VIEW_REFRESH_MS = 30 * 60 * 1000;
+
+/**
+ * A page asks for moves, the briefing and the rotation at once, and each route wants the league.
+ * Within one server instance they share one read of the stored snapshot (a 300 KB row) and, when
+ * it's stale, one reload from ESPN, instead of three of each.
+ */
+const SHARE_MS = 15_000;
+const reads = new Map<string, { at: number; p: Promise<LeagueSnapshot | null> }>();
+const reloads = new Map<string, Promise<LeagueSnapshot>>();
 
 /** The stored snapshot, reloaded first when it's missing or older than maxAgeMs. */
 export async function freshSnapshot(ctx: LeagueContext, maxAgeMs = VIEW_REFRESH_MS): Promise<LeagueSnapshot | null> {
-  const snapshot = await ctx.storage.getLatestSnapshot(ctx.leagueId, ctx.seasonId);
+  const key = `${ctx.storage.scope}:${ctx.leagueId}:${ctx.seasonId}:${ctx.myTeamId}`;
+  let read = reads.get(key);
+  if (!read || Date.now() - read.at > SHARE_MS) {
+    read = { at: Date.now(), p: ctx.storage.getLatestSnapshot(ctx.leagueId, ctx.seasonId) };
+    reads.set(key, read);
+    read.p.catch(() => reads.delete(key));
+  }
+  const snapshot = await read.p;
   if (snapshot && Date.now() - snapshot.fetchedAt <= maxAgeMs) return snapshot;
+  let reload = reloads.get(key);
+  if (!reload) {
+    reload = refreshLeague(ctx).then(async ({ snapshot: fresh }) => {
+      if (ctx.profile) await saveProfile({ ...ctx.profile, lastRefreshAt: Date.now() });
+      reads.set(key, { at: Date.now(), p: Promise.resolve(fresh) });
+      return fresh;
+    }).finally(() => reloads.delete(key));
+    reloads.set(key, reload);
+  }
   try {
-    const fresh = (await refreshLeague(ctx)).snapshot;
-    if (ctx.profile) await saveProfile({ ...ctx.profile, lastRefreshAt: Date.now() });
-    return fresh;
+    return await reload;
   } catch (e) {
     console.error('[refreshLeague] view refresh failed', e);
     return snapshot;

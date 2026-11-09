@@ -5,7 +5,7 @@ import { funnel } from '@/components/funnel';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { LogoMark } from '@/components/Logo';
-import { clearCached, MeProvider, useMeContext } from './useMe';
+import { clearCached, loadCached, MeProvider, MOVES_URL, ROTATION_URL, useMeContext } from './useMe';
 
 /** Draft kit tabs live inside /draft, so remember which one to open before going there. */
 const DRAFT_TABS = [
@@ -15,13 +15,14 @@ const DRAFT_TABS = [
   { id: 'news', label: 'News' },
 ];
 
+/** Each tab and the data it shows, loaded when the tab is hovered or touched so the switch is instant. */
 const VIEWS = [
-  { href: '/inseason', label: 'This week' },
-  { href: '/inseason/waivers', label: 'Free agents' },
-  { href: '/inseason/stash', label: 'Injured stash' },
-  { href: '/inseason/trades', label: 'Trades' },
-  { href: '/inseason/weekly', label: 'Schedule' },
-  { href: '/inseason/connect', label: 'My league' },
+  { href: '/inseason', label: 'This week', data: [MOVES_URL, '/api/inseason/briefing', ROTATION_URL] },
+  { href: '/inseason/waivers', label: 'Free agents', data: [MOVES_URL, ROTATION_URL] },
+  { href: '/inseason/stash', label: 'Injured stash', data: ['/api/inseason/stash'] },
+  { href: '/inseason/trades', label: 'Trades', data: ['/api/inseason/trades'] },
+  { href: '/inseason/weekly', label: 'Schedule', data: [MOVES_URL] },
+  { href: '/inseason/connect', label: 'My league', data: [MOVES_URL] },
 ];
 
 function Header({ season }: { season: boolean }) {
@@ -95,12 +96,17 @@ function Header({ season }: { season: boolean }) {
 
 function SubNav() {
   const path = usePathname();
+  const { me } = useMeContext();
+  // Only for someone with a league: otherwise every call would just answer "sign in".
+  const warm = (urls: string[]) => { if (me?.profile ?? me?.guest) urls.forEach((u) => loadCached(u)); };
   return (
     <div className="no-scrollbar mb-5 inline-flex max-w-full overflow-x-auto rounded-full border border-line bg-panel p-0.5 text-[13px] sm:text-sm">
       {VIEWS.map((v) => (
         <Link
           key={v.href}
           href={v.href}
+          onPointerEnter={() => warm(v.data)}
+          onFocus={() => warm(v.data)}
           className={`whitespace-nowrap rounded-full px-2.5 py-1 sm:px-3 ${path === v.href ? 'bg-sunken font-medium text-fg' : 'text-muted hover:text-fg'}`}
         >
           {v.label}

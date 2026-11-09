@@ -98,7 +98,7 @@ export async function teamTips(): Promise<Map<string, number[]>> {
   return tips;
 }
 
-export interface StreamWindow {
+interface StreamWindow {
   week: number;
   /** First and last US dates counted. */
   from: string;
@@ -121,7 +121,7 @@ export function streamWindow(now = Date.now()): StreamWindow {
 }
 
 /** Games each team has left in the window (games already tipped off don't count). */
-export function gamesIn(tips: Map<string, number[]>, w: StreamWindow, now = Date.now()) {
+function gamesIn(tips: Map<string, number[]>, w: StreamWindow, now = Date.now()) {
   const out = new Map<string, number>();
   for (const [team, list] of tips) {
     out.set(team, list.filter((t) => t > now && easternDate(t) >= w.from && easternDate(t) <= w.end).length);
@@ -131,7 +131,7 @@ export function gamesIn(tips: Map<string, number[]>, w: StreamWindow, now = Date
 
 /* ---------------- Posts ---------------- */
 
-export interface Streamer {
+interface Streamer {
   id: number;
   name: string;
   team: string;
@@ -342,7 +342,7 @@ export async function newsAlertFor(playerId: number): Promise<NewsAlert | null> 
 
 export const OUT = OUT_STATUSES;
 
-export interface ReturnAlert {
+interface ReturnAlert {
   id: number;
   name: string;
   team: string;
@@ -378,8 +378,8 @@ export const BOX_TEAM: Record<string, string> = { UTAH: "UTA", GS: "GSW", NO: "N
 const boxPoints = (b: Record<string, number>) =>
   b.pts + b.tpm - b.fga + 2 * b.fgm - b.fta + b.ftm + b.reb + 2 * b.ast + 4 * b.stl + 4 * b.blk - 2 * b.tov;
 
-export interface Hero { id: number; name: string; team: string; pctOwned: number; fpts: number; line: string; short: string }
-export interface BoxLine extends Hero { min: number; fg: string; tov: number }
+interface Hero { id: number; name: string; team: string; pctOwned: number; fpts: number; line: string; short: string }
+interface BoxLine extends Hero { min: number; fg: string; tov: number }
 
 /**
  * Every player's fantasy line on a US date, from ESPN's box scores. Only finished games count:
@@ -532,7 +532,7 @@ export function newsCaption(a: NewsAlert): string {
 }
 
 /** "pick up X (4% rostered). He gets about +7 min while Embiid sits, ~24 fpts/g. Embiid is out until about Nov 22, so X is a hold, not a one-night stream." */
-export function pickupAdvice(a: NewsAlert, now = Date.now()): string {
+function pickupAdvice(a: NewsAlert, now = Date.now()): string {
   const n = a.nextUp!, last = a.name.split(" ").slice(-1)[0];
   const head = n.minutes ? `pick up ${n.name} (${pct(n.pctOwned)}). He gets about +${n.minutes} min while ${last} sits, ~${n.fppg} fpts/g.` : `pick up ${n.name} (${pct(n.pctOwned)}, ${n.fppg} fpts/g).`;
   const d = absence(a.back, now);
@@ -540,10 +540,6 @@ export function pickupAdvice(a: NewsAlert, now = Date.now()): string {
   return `${head}${length}`;
 }
 
-export function streamersCaption(s: Awaited<ReturnType<typeof streamers>>): string {
-  const rows = s.list.map((p, i) => `${i + 1}. ${p.name} (${p.team}): ${p.games} games, ${p.fppg} fpts/g, ${pct(p.pctOwned)}`);
-  return `Top ${s.list.length} streamers for ${s.window.label} (${dateRange(s.window.from, s.window.end)}) 📈\n\n${rows.join("\n")}\n\nWhich one fits your roster, and who do you drop? ${CTA}\n${TAGS}`;
-}
 
 export function risersCaption(r: Awaited<ReturnType<typeof risersFallers>>): string {
   const row = (m: Mover) => `${m.name} (${m.team}) ${m.pctChange > 0 ? "+" : ""}${m.pctChange}%, now ${m.pctOwned}% rostered`;
@@ -552,10 +548,6 @@ export function risersCaption(r: Awaited<ReturnType<typeof risersFallers>>): str
   return `Who ESPN managers are adding right now 👀\n\n${up}${down}\n\nAre you early or late? ${CTA}\n${TAGS}`;
 }
 
-export function returnCaption(r: ReturnAlert): string {
-  const loser = r.loser ? `\n\nWho loses minutes: ${r.loser.name}. If you picked him up as a fill-in, he's a drop candidate.` : "";
-  return `✅ ${r.name} (${r.team}) is cleared to return.${r.note ? `\n\n${r.note}` : ""}${loser}\n\n${CTA}\n${TAGS}`;
-}
 
 export function heroesCaption(h: Awaited<ReturnType<typeof waiverHeroes>>): string {
   const rows = h.list.map((x, i) => `${i + 1}. ${x.name} (${x.team}): ${x.fpts} fpts, ${x.line}. ${pct(x.pctOwned)}`);

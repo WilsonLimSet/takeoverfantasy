@@ -2,7 +2,7 @@
 
 import type { MatchupGamesComparison } from '@/types';
 import type { StreamingPlan } from '@/lib/inseason/streaming';
-import { InjuryBadge, TeamLogo } from '@/components/ui';
+import { Headshot, InjuryBadge, TeamLogo } from '@/components/ui';
 import { Panel } from './useMe';
 
 const dayLabel = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
@@ -65,12 +65,17 @@ export function SchedulePanel({ data, plan }: { data: MatchupGamesComparison; pl
             {rows.map(({ p, v, next }) => (
               <tr key={p.playerId} className={`border-t border-line align-top ${p.injured ? 'opacity-50' : ''}`}>
                 <td className="py-1.5 pr-2">
-                  <div className="flex max-w-[14rem] items-center gap-1 truncate sm:max-w-none">
-                    {p.nbaTeamAbbrev && <TeamLogo team={p.nbaTeamAbbrev} size={12} />}
-                    <span className="truncate">{p.name}</span>
-                    <InjuryBadge s={p.status} />
+                  <div className="flex items-center gap-2">
+                    <Headshot id={p.playerId} name={p.name} size={28} />
+                    <div className="min-w-0">
+                      <div className="flex max-w-[14rem] items-center gap-1 sm:max-w-none">
+                        <span className="truncate">{p.name}</span>
+                        {p.nbaTeamAbbrev && <TeamLogo team={p.nbaTeamAbbrev} size={12} />}
+                        <InjuryBadge s={p.status} />
+                      </div>
+                      <div className={`text-xs ${v.tone === 'act' ? 'font-medium text-accent' : v.tone === 'keep' ? 'text-fg' : 'text-muted'}`}>{v.text}</div>
+                    </div>
                   </div>
-                  <div className={`text-xs ${v.tone === 'act' ? 'font-medium text-accent' : v.tone === 'keep' ? 'text-fg' : 'text-muted'}`}>{v.text}</div>
                 </td>
                 {p.playsByDay.map((plays, i) => (
                   <td key={i} className={`py-1.5 text-center ${i < left[0] ? 'opacity-30' : ''}`}>
@@ -91,14 +96,20 @@ export function SchedulePanel({ data, plan }: { data: MatchupGamesComparison; pl
         </table>
       </div>
       <p className="mt-2 text-xs text-muted">Green dot: a game on a day you have an open spot. Streaming spots are players outside your core.</p>
-      {data.teams && <TeamGrid data={data} left={left} />}
+      {data.teams && (
+        <details className="mt-4 border-t border-line pt-3">
+          <summary className="cursor-pointer text-sm font-medium">Every team’s schedule this week</summary>
+          <TeamGrid data={data} />
+        </details>
+      )}
     </Panel>
   );
 }
 
 /** Every NBA team's week: games left, back-to-backs, and next week, for picking whose players to stream. */
-function TeamGrid({ data, left }: { data: MatchupGamesComparison; left: number[] }) {
+export function TeamGrid({ data }: { data: MatchupGamesComparison }) {
   const { days } = data;
+  const left = days.map((d, i) => (d.scoringPeriodId >= data.today ? i : -1)).filter((i) => i >= 0);
   const teams = (data.teams ?? [])
     .map((t) => {
       const games = left.filter((i) => t.byDay[i]);
@@ -107,36 +118,33 @@ function TeamGrid({ data, left }: { data: MatchupGamesComparison; left: number[]
     })
     .sort((a, b) => b.games.length - a.games.length || (b.next ?? 0) - (a.next ?? 0) || a.abbrev.localeCompare(b.abbrev));
   return (
-    <details className="mt-4 border-t border-line pt-3">
-      <summary className="cursor-pointer text-sm font-medium">Every team’s schedule this week</summary>
-      <div className="mt-2 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
-              <th className="pb-2 font-medium">Team</th>
-              <th className="pb-2 text-right font-medium">Left</th>
-              {days.map((d, i) => (
-                <th key={d.scoringPeriodId} className={`w-7 pb-2 text-center font-medium ${i < left[0] ? 'opacity-40' : ''}`}>{dayLabel(d.date).slice(0, 2)}</th>
-              ))}
-              <th className="pb-2 pl-2 text-right font-medium">Next</th>
-              <th className="hidden pb-2 pl-3 font-medium sm:table-cell">Back-to-back</th>
-            </tr>
-          </thead>
-          <tbody>
-            {teams.map((t) => (
-              <tr key={t.abbrev} className="border-t border-line">
-                <td className="py-1"><span className="inline-flex items-center gap-1"><TeamLogo team={t.abbrev} size={14} />{t.abbrev}</span></td>
-                <td className={`py-1 text-right tabular-nums font-medium ${t.games.length >= 4 ? 'text-accent' : t.games.length <= 1 ? 'text-muted' : ''}`}>{t.games.length}</td>
-                {t.byDay.map((g, i) => (
-                  <td key={i} className={`py-1 text-center ${i < left[0] ? 'opacity-30' : ''}`}>{g ? <span className="inline-block h-1.5 w-1.5 rounded-full bg-fg" /> : <span className="text-line">·</span>}</td>
-                ))}
-                <td className={`py-1 pl-2 text-right tabular-nums ${(t.next ?? 0) >= 4 ? 'font-medium text-accent' : 'text-muted'}`}>{t.next ?? '–'}</td>
-                <td className="hidden py-1 pl-3 text-xs text-muted sm:table-cell">{t.b2b.join(', ')}</td>
-              </tr>
+    <div className="mt-2 overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
+            <th className="pb-2 font-medium">Team</th>
+            <th className="pb-2 text-right font-medium">Left</th>
+            {days.map((d, i) => (
+              <th key={d.scoringPeriodId} className={`w-7 pb-2 text-center font-medium ${i < left[0] ? 'opacity-40' : ''}`}>{dayLabel(d.date).slice(0, 2)}</th>
             ))}
-          </tbody>
-        </table>
-      </div>
-    </details>
+            <th className="pb-2 pl-2 text-right font-medium">Next</th>
+            <th className="hidden pb-2 pl-3 font-medium sm:table-cell">Back-to-back</th>
+          </tr>
+        </thead>
+        <tbody>
+          {teams.map((t) => (
+            <tr key={t.abbrev} className="border-t border-line">
+              <td className="py-1"><span className="inline-flex items-center gap-1"><TeamLogo team={t.abbrev} size={14} />{t.abbrev}</span></td>
+              <td className={`py-1 text-right tabular-nums font-medium ${t.games.length >= 4 ? 'text-accent' : t.games.length <= 1 ? 'text-muted' : ''}`}>{t.games.length}</td>
+              {t.byDay.map((g, i) => (
+                <td key={i} className={`py-1 text-center ${i < left[0] ? 'opacity-30' : ''}`}>{g ? <span className="inline-block h-1.5 w-1.5 rounded-full bg-fg" /> : <span className="text-line">·</span>}</td>
+              ))}
+              <td className={`py-1 pl-2 text-right tabular-nums ${(t.next ?? 0) >= 4 ? 'font-medium text-accent' : 'text-muted'}`}>{t.next ?? '–'}</td>
+              <td className="hidden py-1 pl-3 text-xs text-muted sm:table-cell">{t.b2b.join(', ')}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

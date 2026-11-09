@@ -40,6 +40,11 @@ body { font-feature-settings: "tnum" 0, "cv11" 1; letter-spacing: -0.006em; }
 
 @utility animate-fade-up { animation: fade-up 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
 
+/* People who turn motion off get content without the slide or pulse. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+
 @layer components {
   /* Placeholder shape while data loads. */
   .skeleton { @apply rounded-md bg-[#ebe9e7]; animation: pulse-soft 1.6s ease-in-out infinite; }

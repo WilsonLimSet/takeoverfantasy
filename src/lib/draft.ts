@@ -58,7 +58,7 @@ export function teamCatProfile(roster: Valued[], cats: Cat[]) {
 /** From this share of the rounds on, recommendations favor ceiling over expected value. */
 export const LATE_ROUND_SHARE = 0.65;
 
-export interface Rec {
+interface Rec {
   v: Valued;
   score: number;
   reasons: string[];

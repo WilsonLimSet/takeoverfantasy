@@ -10,7 +10,7 @@ import { cookies } from 'next/headers';
 import { createStorageAdapter, kvStore } from './storage';
 import { decryptAuth, type InseasonProfile, type LeagueContext } from './profile';
 
-export const GUEST_COOKIE = 'tf_guest';
+const GUEST_COOKIE = 'tf_guest';
 const GUEST_DAYS = 30;
 
 export interface GuestLeague {
@@ -72,7 +72,7 @@ export async function clearGuest() {
 }
 
 /** Storage scope for a guest league's data: one per league and team, apart from every profile's scope. */
-export const guestScope = (g: Pick<GuestLeague, 'leagueId' | 'teamId'>) =>
+const guestScope = (g: Pick<GuestLeague, 'leagueId' | 'teamId'>) =>
   `g_${createHash('sha256').update(`${g.leagueId}:${g.teamId}`).digest('hex').slice(0, 16)}`;
 
 export async function guestContext(g: GuestLeague): Promise<LeagueContext> {

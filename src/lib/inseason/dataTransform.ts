@@ -123,7 +123,7 @@ export function transformPlayer(espnPlayer: ESPNPlayer): Player {
 
 // ============ Roster Transformation ============
 
-export function transformRosterEntry(entry: ESPNRosterEntry): RosterEntry | null {
+function transformRosterEntry(entry: ESPNRosterEntry): RosterEntry | null {
   if (!entry.playerPoolEntry?.player) {
     return null;
   }
@@ -143,7 +143,7 @@ export function transformRosterEntry(entry: ESPNRosterEntry): RosterEntry | null
 
 // ============ Team Transformation ============
 
-export function transformTeam(espnTeam: ESPNTeam, myTeamId: number): Team {
+function transformTeam(espnTeam: ESPNTeam, myTeamId: number): Team {
   const roster = espnTeam.roster?.entries
     .map(transformRosterEntry)
     .filter((entry): entry is RosterEntry => entry !== null);
@@ -170,7 +170,7 @@ export function transformTeam(espnTeam: ESPNTeam, myTeamId: number): Team {
 
 // ============ Matchup Transformation ============
 
-export function transformMatchup(espnMatchup: ESPNMatchup, myTeamId: number): Matchup {
+function transformMatchup(espnMatchup: ESPNMatchup, myTeamId: number): Matchup {
   const isHome = espnMatchup.home.teamId === myTeamId;
   const isAway = espnMatchup.away?.teamId === myTeamId;
 
@@ -187,7 +187,7 @@ export function transformMatchup(espnMatchup: ESPNMatchup, myTeamId: number): Ma
 
 // ============ Free Agent Transformation ============
 
-export function transformFreeAgents(
+function transformFreeAgents(
   response: ESPNFreeAgentResponse,
   scheduleIndex: Record<number, NBATeamSchedule>
 ): FreeAgentEntry[] {
@@ -249,7 +249,7 @@ export function transformFreeAgents(
 
 // ============ Snapshot Building ============
 
-export function buildStatusIndex(
+function buildStatusIndex(
   teams: Team[]
 ): Record<number, { status: PlayerStatus; injuryNote?: string }> {
   const index: Record<number, { status: PlayerStatus; injuryNote?: string }> = {};
@@ -270,7 +270,7 @@ export function buildStatusIndex(
 /**
  * Build schedule index from ESPN pro team schedule data
  */
-export function buildScheduleIndex(
+function buildScheduleIndex(
   nbaSchedule: Array<{
     id: number;
     abbrev: string;

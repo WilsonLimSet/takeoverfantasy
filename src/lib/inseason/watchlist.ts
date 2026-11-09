@@ -8,7 +8,7 @@ import type { LeagueContext } from './profile';
  * he was added here). Removing an ESPN-starred player here hides him until he's un-starred in
  * ESPN, since we can't change the ESPN list.
  */
-export function mergeWatchlist(saved: Watchlist | null, espnIds: number[]): Watchlist {
+function mergeWatchlist(saved: Watchlist | null, espnIds: number[]): Watchlist {
   // Lists saved before the split follow ESPN entirely: the old sync only ever added, so players
   // un-starred in ESPN were stuck on them, and they can't be told apart from players added here.
   const appIds = saved?.appIds ?? [];

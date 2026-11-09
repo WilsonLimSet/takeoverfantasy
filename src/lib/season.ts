@@ -4,9 +4,9 @@
  */
 
 /** Opening night of the regular season (US Eastern date). */
-export const SEASON_START = '2026-10-20';
+const SEASON_START = '2026-10-20';
 /** When drafts start again and the draft kit should lead. */
-export const DRAFT_SEASON_START = '2027-09-01';
+const DRAFT_SEASON_START = '2027-09-01';
 
 export function seasonMode(now = Date.now()): boolean {
   const forced = process.env.NEXT_PUBLIC_SEASON_MODE;

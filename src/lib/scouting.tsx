@@ -8,9 +8,9 @@ import { espnHeaders } from "./espnAuth";
 const KEY = "cv.scouting";
 const ORDER_KEY = "cv.draftOrder";
 
-export interface PlayerHistory { manager: ScoutManager; pick: ScoutPick }
+interface PlayerHistory { manager: ScoutManager; pick: ScoutPick }
 
-export interface ManagerProfile {
+interface ManagerProfile {
   manager: ScoutManager;
   seasons: number;
   /** Share of picks ESPN made for them (autodraft). High means their history says little. */

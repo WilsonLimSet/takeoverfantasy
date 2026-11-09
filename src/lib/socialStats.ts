@@ -8,7 +8,7 @@ import { kvStore } from "./inseason/storage";
  */
 
 interface Metrics { views?: number; reach?: number; likes?: number; replies?: number; reposts?: number; shares?: number; saves?: number; follows?: number }
-export interface StatPost {
+interface StatPost {
   id: string; sourceKey?: string; kind: string; caption: string; scheduledAt: number;
   deliveries: { platform: string; at: number; metrics: Metrics | null }[];
 }
@@ -36,7 +36,7 @@ export async function postStats(now = Date.now()): Promise<StatPost[]> {
 }
 
 /** The format is the post key's prefix: "takes", "take-photo", "satire", "adds", "breaking-alert"... */
-export const formatOf = (p: StatPost) => (p.sourceKey ?? p.kind).split(":")[0];
+const formatOf = (p: StatPost) => (p.sourceKey ?? p.kind).split(":")[0];
 
 const views = (m: Metrics) => m.views ?? m.reach ?? 0;
 /** Engagement weighted by intent: a share or follow is worth far more than a like. */
@@ -57,7 +57,7 @@ function rows(posts: StatPost[]): Row[] {
   return all.map((r) => ({ ...r, rel: score(r.m) / platMedian.get(r.platform)! }));
 }
 
-export interface FormatScore { format: string; n: number; rel: number; views: number; follows: number }
+interface FormatScore { format: string; n: number; rel: number; views: number; follows: number }
 
 /** Each format's typical performance (1.0 = an average post on that platform). */
 export function formatScores(posts: StatPost[]): FormatScore[] {

@@ -22,7 +22,6 @@ import type {
   Watchlist,
   PlayerStatus,
   LeagueTransaction,
-  NBATeamSchedule,
 } from '@/types';
 
 // Injury statuses that indicate player is OUT
@@ -152,32 +151,6 @@ function getStatusLabel(status: PlayerStatus): string {
   return labels[status] || status;
 }
 
-/**
- * Find teammates of a player in the snapshot
- */
-function findTeammates(player: Player, snapshot: LeagueSnapshot): Player[] {
-  const teammates: Player[] = [];
-
-  // Check rostered players
-  for (const team of snapshot.teams) {
-    if (team.roster) {
-      for (const entry of team.roster) {
-        if (entry.player.nbaTeamId === player.nbaTeamId && entry.player.id !== player.id) {
-          teammates.push(entry.player);
-        }
-      }
-    }
-  }
-
-  // Check free agents
-  for (const fa of snapshot.freeAgentsTopN) {
-    if (fa.player.nbaTeamId === player.nbaTeamId && fa.player.id !== player.id) {
-      teammates.push(fa.player);
-    }
-  }
-
-  return teammates;
-}
 
 /**
  * Find a player in the snapshot by ID
@@ -198,20 +171,7 @@ function findPlayerById(playerId: number, snapshot: LeagueSnapshot): Player | nu
   return null;
 }
 
-/**
- * Check if player is on my roster
- */
-function isOnMyRoster(playerId: number, snapshot: LeagueSnapshot): boolean {
-  const myTeam = snapshot.teams.find(t => t.id === snapshot.myTeamId);
-  return myTeam?.roster?.some(r => r.playerId === playerId) || false;
-}
 
-/**
- * Check if player is on watchlist
- */
-function isOnWatchlist(playerId: number, watchlist: Watchlist | null): boolean {
-  return watchlist?.playerIds.includes(playerId) || false;
-}
 
 /**
  * Check if a player is a streamer (below star threshold, worth schedule optimization)
@@ -235,38 +195,7 @@ function getNextNDays(n: number): string[] {
   return days;
 }
 
-/**
- * Detect back-to-back games in schedule
- */
-function hasBackToBack(schedule: NBATeamSchedule, nextDays: string[]): { has: boolean; days: string[] } {
-  for (let i = 0; i < nextDays.length - 1; i++) {
-    const day1 = nextDays[i];
-    const day2 = nextDays[i + 1];
-    if (schedule.gamesByDay[day1] && schedule.gamesByDay[day2]) {
-      return { has: true, days: [day1, day2] };
-    }
-  }
-  return { has: false, days: [] };
-}
 
-/**
- * Detect dead zone (3+ days without a game)
- */
-function hasDeadZone(schedule: NBATeamSchedule, nextDays: string[]): { has: boolean; daysWithoutGame: number } {
-  let consecutiveOff = 0;
-  let maxOff = 0;
-
-  for (const day of nextDays) {
-    if (!schedule.gamesByDay[day]) {
-      consecutiveOff++;
-      maxOff = Math.max(maxOff, consecutiveOff);
-    } else {
-      consecutiveOff = 0;
-    }
-  }
-
-  return { has: maxOff >= 3, daysWithoutGame: maxOff };
-}
 
 /**
  * Generate schedule-based alerts for streamers
@@ -690,10 +619,3 @@ export function hasActionableAlerts(alerts: SmartAlert[]): boolean {
   return alerts.some(a => a.priority === 'HIGH' || a.priority === 'MEDIUM');
 }
 
-/**
- * Sort alerts by priority
- */
-export function sortAlertsByPriority(alerts: SmartAlert[]): SmartAlert[] {
-  const priorityOrder = { HIGH: 0, MEDIUM: 1, LOW: 2 };
-  return [...alerts].sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
-}

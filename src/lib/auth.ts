@@ -82,7 +82,7 @@ export async function checkoutAccessEnd(s: Checkout): Promise<number | null> {
  * When a paid checkout's access ends: 7 days after a week pass, the end of the season for a
  * season pass (and the old draft pass), null for anything else on the Stripe account.
  */
-export function accessEnd(session: Checkout): number | null {
+function accessEnd(session: Checkout): number | null {
   const link = session.payment_link;
   if (!link) return null;
   if (link === process.env.STRIPE_WEEK_LINK_ID) return (session.created ?? 0) * 1000 + WEEK_MS;
@@ -95,7 +95,7 @@ const sign = (s: string) => {
   return createHmac("sha256", SECRET).update(s).digest("base64url");
 };
 
-export function licenseKey(email: string) {
+function licenseKey(email: string) {
   const h = sign(`key:${email.trim().toLowerCase()}`).replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 12);
   return `${h.slice(0, 4)}-${h.slice(4, 8)}-${h.slice(8, 12)}`;
 }
@@ -110,7 +110,7 @@ export function makePass(email: string, until = SEASON_END) {
   return `${body}.${sign(body)}`;
 }
 
-export function readPass(value: string | undefined): { email: string; until: number } | null {
+function readPass(value: string | undefined): { email: string; until: number } | null {
   if (!value || !SECRET) return null;
   const [body, sig] = value.split(".");
   if (!body || !sig) return null;

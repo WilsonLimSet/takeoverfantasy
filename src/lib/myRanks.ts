@@ -22,13 +22,6 @@ function read(): Ranks {
   return cache;
 }
 
-export function setMyRank(id: number, rank: number | null) {
-  const next: Record<number, number> = { ...read() };
-  if (rank == null || !Number.isFinite(rank) || rank < 1) delete next[id]; else next[id] = Math.round(rank);
-  cache = next;
-  try { localStorage.setItem(KEY, JSON.stringify(next)); } catch { /* ignore */ }
-  listeners.forEach((l) => l());
-}
 
 export function clearMyRanks() {
   cache = {};

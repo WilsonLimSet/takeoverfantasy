@@ -7,8 +7,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { requireLeague } from '@/lib/inseason/routeContext';
-import { freshSnapshot } from '@/lib/inseason/refreshLeague';
+import { leagueGet, requireLeague } from '@/lib/inseason/routeContext';
 import { kvStore } from '@/lib/inseason/storage';
 import type { LeagueContext } from '@/lib/inseason/profile';
 import { findTrades } from '@/lib/trades';
@@ -19,21 +18,13 @@ export const maxDuration = 60;
 /** Per person, league and team, so guests (no email) in the same league never share a block. */
 const blockKey = (ctx: LeagueContext) => `trades:block:${(ctx.email || 'guest').toLowerCase()}:${ctx.leagueId}:${ctx.myTeamId}:${ctx.seasonId}`;
 
-export async function GET() {
-  const { ctx, error } = await requireLeague();
-  if (error) return error;
-  try {
-    const [snapshot, block] = await Promise.all([freshSnapshot(ctx), kvStore().get<number[]>(blockKey(ctx)).catch(() => null)]);
-    if (!snapshot) return NextResponse.json({ success: false, error: 'No league data yet. Hit Refresh on This week to load it.' }, { status: 404 });
-    const found = await findTrades(snapshot, block ?? []);
-    // Only ids still on your roster (a traded or dropped player falls off the block).
-    const mine = new Set(found.roster.map((p) => p.id));
-    return NextResponse.json({ success: true, leagueId: ctx.leagueId, seasonId: ctx.seasonId, block: (block ?? []).filter((id) => mine.has(id)), ...found });
-  } catch (e) {
-    console.error('[trades]', e);
-    return NextResponse.json({ success: false, error: 'Could not build trade ideas. Try again in a minute.' }, { status: 502 });
-  }
-}
+export const GET = leagueGet('trades', async (ctx, snapshot) => {
+  const block = (await kvStore().get<number[]>(blockKey(ctx)).catch(() => null)) ?? [];
+  const found = await findTrades(snapshot, block);
+  // Only ids still on your roster (a traded or dropped player falls off the block).
+  const mine = new Set(found.roster.map((p) => p.id));
+  return { leagueId: ctx.leagueId, seasonId: ctx.seasonId, block: block.filter((id) => mine.has(id)), ...found };
+});
 
 export async function POST(req: Request) {
   const { ctx, error } = await requireLeague();

@@ -42,7 +42,7 @@ export async function fetchPlayerNews(playerId: number, limit = 6, fresh = false
  * card carries our own one-line summary (written by the news cron, see autoTakes) when we have one,
  * the date, and a link to read the original on ESPN.
  */
-export interface NewsCard {
+interface NewsCard {
   id: number;
   playerId: number;
   published: string;

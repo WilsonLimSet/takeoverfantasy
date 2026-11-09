@@ -103,7 +103,7 @@ export async function sendEmail(to: string, msg: { subject: string; html: string
 }
 
 /** A signed one-click unsubscribe link for the news emails (no sign-in needed). */
-export function newsUnsubscribeUrl(email: string): string {
+function newsUnsubscribeUrl(email: string): string {
   const secret = process.env.CV_SECRET ?? 'dev-secret-change-me';
   const t = createHmac('sha256', secret).update(`unsub:${email.toLowerCase()}`).digest('base64url').slice(0, 24);
   return `${SITE}/api/news/unsubscribe?e=${encodeURIComponent(email.toLowerCase())}&t=${t}`;

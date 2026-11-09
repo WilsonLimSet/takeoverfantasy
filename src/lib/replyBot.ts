@@ -22,7 +22,7 @@ export function validReplyToken(t: string | null): boolean {
 const AMBIGUOUS = new Set(["green", "white", "brown", "black", "young", "love", "hart", "holiday", "allen", "johnson", "williams", "jones", "smith", "thompson", "porter", "murray", "bridges", "walker", "harris", "mitchell", "jackson", "robinson", "miller", "martin", "wells", "price", "gay", "day", "james", "george", "paul", "ball", "bey", "reed", "king"]);
 
 /** Players named in a message: full names first, then unambiguous last names. */
-export function findPlayers(text: string, players: Player[]): Player[] {
+function findPlayers(text: string, players: Player[]): Player[] {
   const msg = ` ${normName(text).replace(/[^a-z0-9 ]/g, " ")} `.replace(/\s+/g, " ");
   const pool = players.filter((p) => p.team !== "FA" && fppg(p) >= 5);
   const found = new Map<number, Player>();

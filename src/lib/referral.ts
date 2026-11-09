@@ -11,12 +11,12 @@ import { kvStore } from "./inseason/storage";
 
 export const REF_COOKIE = "tf_ref";
 export const PROMO_COOKIE = "tf_promo";
-export const REFERRAL_DAYS = 7;
+const REFERRAL_DAYS = 7;
 const DAY = 24 * 60 * 60 * 1000;
 const refKey = (code: string) => `ref:code:${code}`;
 
 /** A user's referral code: short, stable, and not guessable from their email. */
-export function referralCode(email: string): string {
+function referralCode(email: string): string {
   const secret = process.env.CV_SECRET ?? "dev-secret-change-me";
   return createHmac("sha256", secret).update(`ref:${email.toLowerCase()}`).digest("base64url").replace(/[^A-Za-z0-9]/g, "").slice(0, 8);
 }

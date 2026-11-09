@@ -10,7 +10,7 @@ import { kvStore } from "./inseason/storage";
 const WEB = "https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba";
 const SITE = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba";
 /** Absences this long are one big injury. */
-export const LONG_ABSENCE = 10;
+const LONG_ABSENCE = 10;
 
 export interface SeasonHealth {
   season: number;
@@ -98,7 +98,7 @@ const ROTATION_MIN = 18;
 /** Newest season first. */
 const RECENCY = [0.5, 0.3, 0.2];
 
-export async function healthProfile(id: number, seasons: number[]): Promise<HealthProfile> {
+async function healthProfile(id: number, seasons: number[]): Promise<HealthProfile> {
   const list = (await Promise.all(seasons.map((s) => seasonHealth(id, s)))).filter((s): s is SeasonHealth => !!s);
   const used = list.filter((x) => x.min >= ROTATION_MIN && x.teamGames >= 20).sort((a, b) => b.season - a.season);
   const ws = used.map((_, i) => RECENCY[i] ?? 0.1), wsum = ws.reduce((a, b) => a + b, 0) || 1;

@@ -1,18 +1,13 @@
 /**
  * Fantasy Basketball Optimizer
- * Waiver ranking, streaming plans, and injury detection
+ * The daily briefing: waiver ranking and injury openings for This week.
  */
 
 import type {
   LeagueSnapshot,
   Player,
-  Team,
-  FreeAgentEntry,
   WaiverRecommendation,
-  WeeklyStreamingPlan,
-  StreamingSlot,
   InjuryOpportunity,
-  RosterEntry,
   NBATeamSchedule,
   DailyBriefing,
   StatusChange,
@@ -33,11 +28,6 @@ const WAIVER_WEIGHTS = {
 // Injury statuses that should exclude players from recommendations
 const INJURED_STATUSES: PlayerStatus[] = ['OUT', 'INJURY_RESERVE', 'SUSPENSION'];
 
-const STREAMING_WEIGHTS = {
-  games: 0.50,
-  projected: 0.35,
-  upside: 0.15,
-};
 
 // ============ Waiver Wire Ranking ============
 
@@ -133,7 +123,7 @@ function isPlayerInjured(player: Player): boolean {
  * Filters out injured players (OUT, IR, SUSPENDED)
  * Applies injury history penalty to injury-prone players
  */
-export function getWaiverRecommendations(
+function getWaiverRecommendations(
   snapshot: LeagueSnapshot,
   limit = 10,
   injuryHistory?: InjuryHistoryIndex | null
@@ -212,152 +202,14 @@ export function getWaiverRecommendations(
 
 // ============ Weekly Streaming Plan ============
 
-/**
- * Get the roster spot candidates for streaming (bench players)
- */
-function getStreamingCandidates(team: Team): RosterEntry[] {
-  if (!team.roster) return [];
 
-  // Find bench players (lineupSlotId 12 = BE)
-  return team.roster.filter((entry) => entry.lineupSlotId === 12);
-}
-
-/**
- * Find best streaming add for a given day
- * Excludes injured players
- */
-function findStreamingAdd(
-  date: string,
-  availablePlayers: FreeAgentEntry[],
-  scheduleIndex: Record<number, NBATeamSchedule>,
-  usedPlayers: Set<number>
-): FreeAgentEntry | undefined {
-  // Find healthy players with games on this date who aren't already used
-  const candidates = availablePlayers.filter((fa) => {
-    if (usedPlayers.has(fa.player.id)) return false;
-    // Skip injured players for streaming
-    if (isPlayerInjured(fa.player)) return false;
-    const schedule = scheduleIndex[fa.player.nbaTeamId];
-    return schedule?.gamesByDay[date] === true;
-  });
-
-  // Return best available by score
-  candidates.sort((a, b) => b.score - a.score);
-  return candidates[0];
-}
-
-/**
- * Generate weekly streaming plan
- * Default 5 adds/week for standard ESPN leagues
- */
-export function generateWeeklyStreamingPlan(
-  snapshot: LeagueSnapshot,
-  addsPerWeek = 5
-): WeeklyStreamingPlan {
-  const myTeam = snapshot.teams.find((t) => t.id === snapshot.myTeamId);
-  if (!myTeam) {
-    throw new Error('My team not found in snapshot');
-  }
-
-  // Get current matchup dates (simplified - would need real schedule)
-  const today = new Date();
-  const weekDays: string[] = [];
-  for (let i = 0; i < 7; i++) {
-    const date = new Date(today);
-    date.setDate(date.getDate() + i);
-    weekDays.push(date.toISOString().split('T')[0]);
-  }
-
-  const streamingCandidates = getStreamingCandidates(myTeam);
-  const usedPlayerIds = new Set<number>();
-  const plan: StreamingSlot[] = [];
-
-  let addsUsed = 0;
-  let gamesGained = 0;
-
-  for (const date of weekDays) {
-    const dayOfWeek = new Date(date).toLocaleDateString('en-US', { weekday: 'short' });
-
-    // Check if we have adds remaining
-    if (addsUsed >= addsPerWeek) {
-      plan.push({
-        date,
-        dayOfWeek,
-        reason: 'No adds remaining',
-        gamesGained: 0,
-      });
-      continue;
-    }
-
-    // Find a streaming add for this day
-    const bestAdd = findStreamingAdd(
-      date,
-      snapshot.freeAgentsTopN,
-      snapshot.scheduleIndex,
-      usedPlayerIds
-    );
-
-    if (bestAdd) {
-      // Find a drop candidate
-      const dropCandidate = streamingCandidates.find(
-        (entry) => !usedPlayerIds.has(entry.playerId)
-      );
-
-      if (dropCandidate) {
-        usedPlayerIds.add(bestAdd.player.id);
-        usedPlayerIds.add(dropCandidate.playerId);
-        addsUsed++;
-        gamesGained++;
-
-        plan.push({
-          date,
-          dayOfWeek,
-          recommendedAdd: bestAdd.player,
-          recommendedDrop: dropCandidate.player,
-          reason: `Add ${bestAdd.player.name} (${bestAdd.player.nbaTeamAbbrev}) for game`,
-          gamesGained: 1,
-        });
-      } else {
-        plan.push({
-          date,
-          dayOfWeek,
-          reason: 'No drop candidates available',
-          gamesGained: 0,
-        });
-      }
-    } else {
-      plan.push({
-        date,
-        dayOfWeek,
-        reason: 'No advantageous streaming options',
-        gamesGained: 0,
-      });
-    }
-  }
-
-  // Calculate total games with and without streaming
-  const baseGames = (myTeam.roster?.length || 10) * 3; // Estimate
-  const totalGamesWithStreaming = baseGames + gamesGained;
-
-  return {
-    week: snapshot.week,
-    weekStartDate: weekDays[0],
-    weekEndDate: weekDays[weekDays.length - 1],
-    totalGamesWithStreaming,
-    totalGamesWithoutStreaming: baseGames,
-    gamesGained,
-    addsRemaining: addsPerWeek - addsUsed,
-    addsUsed,
-    plan,
-  };
-}
 
 // ============ Injury Opportunity Detection ============
 
 /**
  * Find players who could benefit from an injury
  */
-export function detectInjuryOpportunities(
+function detectInjuryOpportunities(
   snapshot: LeagueSnapshot,
   statusChanges: StatusChange[]
 ): InjuryOpportunity[] {
@@ -511,53 +363,3 @@ export function generateDailyBriefing(
 
 // ============ Drop Recommendations ============
 
-/**
- * Find players on roster who might be worth dropping
- */
-export function getDropRecommendations(
-  snapshot: LeagueSnapshot,
-  limit = 5
-): Array<{ player: Player; reasons: string[] }> {
-  const myTeam = snapshot.teams.find((t) => t.id === snapshot.myTeamId);
-  if (!myTeam?.roster) return [];
-
-  const dropCandidates: Array<{ player: Player; score: number; reasons: string[] }> = [];
-
-  for (const entry of myTeam.roster) {
-    const player = entry.player;
-    const schedule = snapshot.scheduleIndex[player.nbaTeamId];
-    const reasons: string[] = [];
-    let dropScore = 0;
-
-    // Factor 1: Low games upcoming
-    if (schedule && schedule.gamesNext7Days <= 2) {
-      dropScore += 20;
-      reasons.push(`Only ${schedule.gamesNext7Days} games next 7 days`);
-    }
-
-    // Factor 2: Injured/Out
-    if (player.status === 'OUT' || player.status === 'INJURY_RESERVE') {
-      dropScore += 30;
-      reasons.push(`Status: ${player.status}`);
-    }
-
-    // Factor 3: Low ownership/trending down
-    if (player.ownership && player.ownership.percentChange < -5) {
-      dropScore += 15;
-      reasons.push('Ownership trending down');
-    }
-
-    // Factor 4: Bench player (not starting)
-    if (entry.lineupSlotId === 12) {
-      dropScore += 10;
-      reasons.push('Currently benched');
-    }
-
-    if (reasons.length > 0) {
-      dropCandidates.push({ player, score: dropScore, reasons });
-    }
-  }
-
-  dropCandidates.sort((a, b) => b.score - a.score);
-  return dropCandidates.slice(0, limit);
-}

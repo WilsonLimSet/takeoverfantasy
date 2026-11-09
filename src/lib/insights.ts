@@ -1,7 +1,7 @@
 import { Cat, League, Valued, edgeTags, fantasyPoints } from "./engine";
 import { DraftSequence, fillLineup, teamForPick } from "./draft";
 
-export interface Insight { tone: "good" | "bad" | "info"; text: string }
+interface Insight { tone: "good" | "bad" | "info"; text: string }
 
 const espnRank = (v: Valued, league: League) =>
   (league.format === "cats" ? v.p.espnRankRoto ?? v.p.espnRank : v.p.espnRank ?? v.p.espnRankRoto) ?? null;
@@ -81,14 +81,14 @@ export function playerInsights(v: Valued, league: League): Insight[] {
 
 /* ---------------- Mock draft review ---------------- */
 
-export interface PickReview { k: number; v: Valued; delta: number; label: "Steal" | "Value" | "Fair" | "Reach" }
-export interface TeamReview {
+interface PickReview { k: number; v: Valued; delta: number; label: "Steal" | "Value" | "Fair" | "Reach" }
+interface TeamReview {
   t: number; score: number; place: number; grade: string; fppg: number;
   /** Average projected games of the starters. */
   games: number;
   best: Valued | null;
 }
-export interface DraftReview {
+interface DraftReview {
   teams: TeamReview[];
   mine: TeamReview;
   myPicks: PickReview[];
@@ -307,7 +307,7 @@ function phi(z: number) {
   return z > 0 ? 1 - p : p;
 }
 
-export interface H2HTeam {
+interface H2HTeam {
   t: number;
   /** Chance of beating each other team in a week (index = team; NaN for itself). */
   vs: number[];
