@@ -8,14 +8,10 @@
 import { NextResponse } from 'next/server';
 import { requireLeague } from '@/lib/inseason/routeContext';
 import { freshSnapshot } from '@/lib/inseason/refreshLeague';
-import { currentPeriod } from '@/lib/inseason/matchupGames';
-import { NBA_TEAMS } from '@/lib/inseason/espnClient';
-import { rotationReport, type LeagueRotationEntry, type RotationResponse } from '@/lib/rotation';
+import { placeInLeague, rotationReport, type RotationResponse } from '@/lib/rotation';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
-
-const TEAM_ID = new Map(Object.entries(NBA_TEAMS).map(([id, t]) => [t.abbrev, Number(id)]));
 
 export async function GET() {
   const { ctx, error } = await requireLeague();
@@ -23,23 +19,7 @@ export async function GET() {
   try {
     const [snapshot, report] = await Promise.all([freshSnapshot(ctx), rotationReport()]);
     if (!report) return NextResponse.json({ success: false, error: 'No box scores yet.' }, { status: 404 });
-    const owner = new Map<number, { mine: boolean; name: string }>();
-    for (const t of snapshot?.teams ?? []) for (const r of t.roster ?? []) owner.set(r.player.id, { mine: t.id === snapshot!.myTeamId, name: t.name });
-    const waivers = new Set((snapshot?.freeAgentsTopN ?? []).filter((f) => f.onWaivers).map((f) => f.player.id));
-    const today = snapshot ? currentPeriod(snapshot) : 0;
-    const entries: LeagueRotationEntry[] = report.entries.map((e) => {
-      const o = owner.get(e.id);
-      const team = TEAM_ID.get(e.team);
-      const week = team !== undefined ? snapshot?.matchupWeek?.teamGames[team] : undefined;
-      const next = team !== undefined ? snapshot?.nextMatchupWeek?.teamGames[team] : undefined;
-      return {
-        ...e,
-        where: o ? (o.mine ? 'mine' : 'taken') : waivers.has(e.id) ? 'waivers' : 'free',
-        owner: o && !o.mine ? o.name : undefined,
-        gamesLeft: week ? week.filter((p) => p >= today).length : undefined,
-        gamesNext: next?.length,
-      };
-    });
+    const entries = placeInLeague(report, snapshot);
     return NextResponse.json({ success: true, night: report.night, entries } satisfies RotationResponse);
   } catch (e) {
     console.error('[rotation]', e);

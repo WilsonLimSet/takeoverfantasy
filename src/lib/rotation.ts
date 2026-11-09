@@ -1,5 +1,8 @@
 import { getPlayers } from "./data";
 import { kvStore } from "./inseason/storage";
+import { NBA_TEAMS } from "./inseason/espnClient";
+import { currentPeriod } from "./inseason/matchupGames";
+import type { LeagueSnapshot } from "@/types";
 import { boxLines, easternDate } from "./social";
 import type { Player } from "./types";
 import { valueContext, valuePlayer } from "./value";
@@ -231,3 +234,29 @@ export async function rotationReport(now = Date.now()): Promise<RotationReport |
   await kv.set(cacheKey, report).catch(() => {});
   return report;
 }
+
+const TEAM_ID = new Map(Object.entries(NBA_TEAMS).map(([id, t]) => [t.abbrev, Number(id)]));
+
+/** The report in one league: whose each player is, and his games left this week and next. */
+export function placeInLeague(report: RotationReport, snapshot: LeagueSnapshot | null): LeagueRotationEntry[] {
+  const owner = new Map<number, { mine: boolean; name: string }>();
+  for (const t of snapshot?.teams ?? []) for (const r of t.roster ?? []) owner.set(r.player.id, { mine: t.id === snapshot!.myTeamId, name: t.name });
+  const waivers = new Set((snapshot?.freeAgentsTopN ?? []).filter((f) => f.onWaivers).map((f) => f.player.id));
+  const today = snapshot ? currentPeriod(snapshot) : 0;
+  return report.entries.map((e) => {
+    const o = owner.get(e.id);
+    const team = TEAM_ID.get(e.team);
+    const week = team !== undefined ? snapshot?.matchupWeek?.teamGames[team] : undefined;
+    const next = team !== undefined ? snapshot?.nextMatchupWeek?.teamGames[team] : undefined;
+    return {
+      ...e,
+      where: o ? (o.mine ? "mine" : "taken") : waivers.has(e.id) ? "waivers" : "free",
+      owner: o && !o.mine ? o.name : undefined,
+      gamesLeft: week ? week.filter((p) => p >= today).length : undefined,
+      gamesNext: next?.length,
+    };
+  });
+}
+
+export const isRoleUp = (e: RotationEntry) => e.kind === "up" || e.kind === "grown" || e.kind === "opening" || (e.kind === "news" && /^Role up/.test(e.note));
+export const isRoleDown = (e: RotationEntry) => e.kind === "down" || e.kind === "benched" || (e.kind === "news" && /^Role down/.test(e.note));

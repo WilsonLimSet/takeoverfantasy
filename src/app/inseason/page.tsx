@@ -6,7 +6,7 @@ import { funnel } from '@/components/funnel';
 import { useCallback, useEffect, useState } from 'react';
 import type { DailyBriefing } from '@/types';
 import { InjuryBadge } from '@/components/ui';
-import { BridgePanel, EdgeCard, TrackRecordPanel, MatchupGamesPanel, MoveRow, StatStrip, WatchlistPanel, type MovesPreview, type MovesResponse } from './MovesPanel';
+import { BridgePanel, EdgeCard, HeadToHead, TrackRecordPanel, MatchupGamesPanel, MoveRow, StatStrip, WatchlistPanel, type MovesPreview, type MovesResponse } from './MovesPanel';
 import { SchedulePanel } from './SchedulePanel';
 import { RotationPanel } from './RotationPanel';
 import { ErrorBox, formatAge, Gate, invalidateCached, Loading, MOVES_URL, Panel, SaveLeague, useCached, useMeContext } from './useMe';
@@ -150,6 +150,7 @@ export default function ThisWeekPage() {
         <StatStrip plan={plan} mg={mg} />
       </div>
       <EdgeCard plan={plan} espnUrl={moves.espnUrl} />
+      {moves.opponent && <HeadToHead plan={plan} mg={mg} o={moves.opponent} />}
       {plan.bridge && <BridgePanel bridge={plan.bridge} addsLeft={plan.addsLeft} espnUrl={moves.espnUrl} mode={plan.mode} />}
 
       <div className="grid gap-5 lg:grid-cols-[1fr_340px]">

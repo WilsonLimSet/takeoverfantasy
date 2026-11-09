@@ -195,7 +195,7 @@ export interface LeagueSnapshot {
   /** ESPN lineup slot id -> how many the league has. */
   lineupSlots?: Record<string, number>;
   /** Pickups allowed this matchup (null = unlimited) and how many my team has used. */
-  acquisitions?: { limit: number | null; used: number };
+  acquisitions?: { limit: number | null; used: number; /** Every team's pickups used this matchup, by team id. */ byTeam?: Record<number, number> };
   /** Points (H2H_POINTS etc.) or categories league. */
   scoringType?: string;
   /** ESPN's estimated return dates (YYYY-MM-DD) for injured players, by player id. */

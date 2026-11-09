@@ -7,11 +7,13 @@
 
 import type { MatchupGamesComparison } from '@/types';
 import type { StreamingPlan } from './streaming';
+import { opponentOutlook, type OpponentOutlook } from './opponent';
 import { espnAddUrl, watchlistHits } from './email';
 import { kvStore } from './storage';
 import { getProfile, hasInseasonAccess, profileContext, saveProfile } from './profile';
 import { buildStreamingPlan } from './streaming';
 import { compareMatchupGames } from './matchupGames';
+import { isRoleDown, isRoleUp, type LeagueRotationEntry } from '../rotation';
 import { createHash } from 'node:crypto';
 
 const API = 'https://api.telegram.org';
@@ -103,6 +105,7 @@ export async function movesMessage(email: string): Promise<string | null> {
     teamId: profile.teamId,
     plan,
     matchup: compareMatchupGames(snapshot),
+    opponent: opponentOutlook(snapshot),
   });
 }
 
@@ -233,8 +236,9 @@ export function dailyTelegram(opts: {
   teamId: number;
   plan: StreamingPlan;
   matchup?: MatchupGamesComparison;
+  opponent?: OpponentOutlook | null;
 }): string {
-  const { plan, matchup } = opts;
+  const { plan, matchup, opponent: o } = opts;
   const lines = [`<b>${esc(opts.teamName)}</b> · Week ${plan.week} · ${plan.daysLeft} days left${plan.addsLeft !== null ? ` · ${plan.addsLeft} pickups left` : ''}`];
   const gain = Math.round(plan.moves.reduce((s, m) => s + m.pointsGain, 0));
   if (plan.moves.length) lines.push(`<b>Your edge: +${gain} ${plan.pointsLeague ? 'pts' : 'games'}</b> from ${plan.moves.length} ${plan.moves.length === 1 ? 'move' : 'moves'}${plan.fillsDays?.length ? `, filling ${plan.fillsDays.map(weekday).join(', ')}` : ''}`);
@@ -244,6 +248,10 @@ export function dailyTelegram(opts: {
     lines.push(`Projected: ${p.me.projected} to ${p.opponent.projected} vs ${esc(p.opponentName)} (${say(p.me.projected)})${plan.moves.length ? `. With the moves: ${say(p.me.withMoves)}` : ''}`);
   } else if (matchup?.opponent) {
     lines.push(`Usable games: you ${matchup.me.usableGames}, ${esc(matchup.opponent.name)} ${matchup.opponent.usableGames}`);
+  }
+  if (o) {
+    const adds = (n: number | null) => (n === null ? 'no limit' : String(n));
+    lines.push(`Pickups left: you ${adds(plan.addsLeft)}, them ${adds(o.addsLeft)}.${o.moves ? ` If they stream well they add about ${o.pointsGain > 0 && plan.pointsLeague ? `${o.pointsGain} pts` : `${o.gamesWithMoves - o.games} games`}.` : ''}`);
   }
   for (const w of plan.warnings ?? []) lines.push(`⚠️ ${esc(w)}`);
   if (plan.coreCost) lines.push(`Your core list is holding back +${plan.coreCost.gain}: unlocking ${esc(plan.coreCost.players.map((c) => `${c.name} (+${c.pointsGain} with ${c.addName})`).join(' and '))} would add it.`);
@@ -264,5 +272,31 @@ export function dailyTelegram(opts: {
     for (const w of hits) lines.push(`• ${esc(w.player.name)}: ${w.player.gamesLeft} games left, +${Math.round(w.bestMove!.pointsGain)} projected pts for ${esc(w.bestMove!.drop.name)}`);
   }
   lines.push('', `<a href="${esc(espnAddUrl(opts.leagueId, opts.teamId))}">Make moves on ESPN</a> · <a href="${esc(`${SITE}/inseason`)}">Open Takeover</a>`);
+  return lines.join('\n');
+}
+
+/**
+ * The morning rotation note: your players losing minutes, and the best free agents who just got
+ * them. Only players not already sent in the last week, so it's news, not a daily repeat.
+ */
+export function rotationTelegram(entries: LeagueRotationEntry[], leagueId: string, teamId: number): string | null {
+  const mine = entries.filter((e) => e.where === 'mine' && isRoleDown(e));
+  const pickups = entries
+    // Skip a bump whose injured teammate is back within 2 days: gone before the pickup pays off.
+    .filter((e) => (e.where === 'free' || e.where === 'waivers') && isRoleUp(e) && (e.kind !== 'opening' || (e.because?.minutes ?? 0) >= 6) && !(e.because && Date.parse(`${e.because.until}T12:00:00Z`) - Date.now() < 2 * 864e5))
+    .sort((a, b) => (b.fptsRecent || 0) - (a.fptsRecent || 0))
+    .slice(0, 4);
+  if (!mine.length && !pickups.length) return null;
+  const games = (e: LeagueRotationEntry) => (e.gamesLeft !== undefined ? ` ${e.gamesLeft} games left this week${e.gamesNext !== undefined ? `, ${e.gamesNext} next` : ''}.` : '');
+  const lines = ['<b>Rotation watch</b>'];
+  if (mine.length) {
+    lines.push('', '<b>Your players losing minutes</b>');
+    for (const e of mine) lines.push(`• <b>${esc(e.name)}</b> (${esc(e.team)}): ${esc(e.note)}`);
+  }
+  if (pickups.length) {
+    lines.push('', '<b>Just got minutes, free in your league</b>');
+    for (const e of pickups) lines.push(`• <b>${esc(e.name)}</b> (${esc(e.team)}${e.where === 'waivers' ? ', waivers' : ''}): ${esc(e.note)}${games(e)}`);
+  }
+  lines.push('', `<a href="${esc(espnAddUrl(leagueId, teamId))}">Make moves on ESPN</a>`);
   return lines.join('\n');
 }

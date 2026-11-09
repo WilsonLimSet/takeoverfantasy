@@ -16,7 +16,10 @@ import { requireLeague } from '@/lib/inseason/routeContext';
 import { buildStreamingPlan } from '@/lib/inseason/streaming';
 import { compareMatchupGames } from '@/lib/inseason/matchupGames';
 import { dailyEmail, EMAIL_ON, sendEmail } from '@/lib/inseason/email';
-import { dailyTelegram, reminderTelegram, sendTelegramTo, TELEGRAM_ON } from '@/lib/inseason/telegramUser';
+import { dailyTelegram, reminderTelegram, rotationTelegram, sendTelegramTo, TELEGRAM_ON } from '@/lib/inseason/telegramUser';
+import { placeInLeague, rotationReport, type RotationReport } from '@/lib/rotation';
+import { kvStore } from '@/lib/inseason/storage';
+import { opponentOutlook } from '@/lib/inseason/opponent';
 import { injuryReport, recordInjuryHistory } from '@/lib/inseason/stash';
 import type { LeagueSnapshot } from '@/types';
 
@@ -60,6 +63,7 @@ async function sendMoves(profile: InseasonProfile, snapshot: LeagueSnapshot, wat
     teamId: profile.teamId,
     plan,
     matchup: compareMatchupGames(snapshot),
+    opponent: opponentOutlook(snapshot),
   };
   const [email, telegram] = await Promise.all([
     EMAIL_ON && profile.alerts.email ? sendEmail(profile.email, dailyEmail(opts)) : false,
@@ -70,6 +74,26 @@ async function sendMoves(profile: InseasonProfile, snapshot: LeagueSnapshot, wat
     await saveProfile({ ...profile, lastAlert: { date, key } });
   }
   return { email, telegram };
+}
+
+/** Don't repeat a rotation note about the same player and change within this many days. */
+const ROTATION_REPEAT_DAYS = 7;
+
+/** The morning rotation note on Telegram: only changes this user hasn't been sent this week. */
+async function sendRotation(profile: InseasonProfile, snapshot: LeagueSnapshot, report: RotationReport): Promise<boolean> {
+  if (!profile.telegram || !profile.alerts.telegram) return false;
+  const kv = kvStore();
+  const key = `rotation:sent:${profile.email}:${profile.leagueId}:${profile.teamId}`;
+  const sent = (await kv.get<Record<string, number>>(key).catch(() => null)) ?? {};
+  const now = Date.now();
+  const fresh = placeInLeague(report, snapshot).filter((e) => now - (sent[`${e.id}:${e.kind}`] ?? 0) > ROTATION_REPEAT_DAYS * 864e5);
+  const text = rotationTelegram(fresh, profile.leagueId, profile.teamId);
+  if (!text || !(await sendTelegramTo(profile.telegram.chatId, text))) return false;
+  for (const e of fresh) sent[`${e.id}:${e.kind}`] = now;
+  // Forget old ones so the record stays small.
+  for (const [k, t] of Object.entries(sent)) if (now - t > 30 * 864e5) delete sent[k];
+  await kv.set(key, sent);
+  return true;
 }
 
 /** A Telegram nudge when a move is due after tonight's games, at most once a day. */
@@ -104,6 +128,8 @@ export async function GET(request: Request) {
 
   // Only accounts with a running pass (or no paywall): an expired week pass stops the work and the alerts.
   const profiles = await withAccess(await listProfiles());
+  // One rotation report for everyone (cached per night of box scores).
+  const rotation = sendAlerts && TELEGRAM_ON ? await rotationReport().catch((e) => { console.error('[Refresh] rotation failed:', e); return null; }) : null;
   let refreshed = 0, failed = 0, emailed = 0, telegrammed = 0;
   // A few at a time keeps ESPN happy and stays well inside the function's time limit.
   for (let i = 0; i < profiles.length; i += 5) {
@@ -119,6 +145,7 @@ export async function GET(request: Request) {
             const sent = await sendMoves(fresh, snapshot, watchlist?.playerIds ?? []);
             if (sent.email) emailed++;
             if (sent.telegram) telegrammed++;
+            if (rotation && (await sendRotation(fresh, snapshot, rotation).catch(() => false))) telegrammed++;
           }
           if (sendReminders && (await sendReminder(fresh, snapshot, watchlist?.playerIds ?? []))) telegrammed++;
         } catch (e) {

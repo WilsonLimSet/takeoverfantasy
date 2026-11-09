@@ -6,6 +6,7 @@ import { Fragment } from 'react';
 import type { MoveDay, StreamingPlan, StreamMove, WatchlistNote } from '@/lib/inseason/streaming';
 import type { GameRange } from '@/lib/inseason/gameLogs';
 import type { PickTrackRecord } from '@/lib/inseason/pickLog';
+import type { OpponentOutlook } from '@/lib/inseason/opponent';
 import { Headshot, InjuryBadge, TeamLogo } from '@/components/ui';
 import { Panel } from './useMe';
 
@@ -22,6 +23,7 @@ export interface MovesResponse {
   preview?: MovesPreview;
   record?: PickTrackRecord | null;
   overall?: PickTrackRecord | null;
+  opponent?: OpponentOutlook | null;
 }
 
 export interface MovesPreview {
@@ -519,6 +521,58 @@ export function TrackRecordPanel({ record, overall }: { record?: PickTrackRecord
           All leagues: our #1 beat our #2 in {overall.beatNext} of {overall.graded} ({pct(overall)}%).
         </p>
       )}
+    </Panel>
+  );
+}
+
+/**
+ * You vs them, side by side: games left, pickups left, and what each side's best moves add (our
+ * move engine run for both rosters). A games edge can vanish if they have more pickups left.
+ */
+export function HeadToHead({ plan, mg, o }: { plan: StreamingPlan; mg?: MatchupGamesComparison; o: OpponentOutlook }) {
+  const adds = (n: number | null) => (n === null ? 'No limit' : String(n));
+  const pts = plan.pointsLeague;
+  const myGain = pts ? Math.round(plan.after.points - plan.baseline.points) : plan.after.usableGames - plan.baseline.usableGames;
+  const theirGain = pts ? o.pointsGain : o.gamesWithMoves - o.games;
+  const p = plan.matchup;
+  const rows: { k: string; me: string; them: string; meWins?: boolean; themWins?: boolean }[] = [
+    { k: 'Usable games left', me: String(mg?.me.usableGames ?? plan.baseline.usableGames), them: String(o.games) },
+    { k: 'Pickups left', me: adds(plan.addsLeft), them: adds(o.addsLeft) },
+    { k: 'Games best moves add', me: `+${plan.after.usableGames - plan.baseline.usableGames}`, them: `+${o.gamesWithMoves - o.games}` },
+    ...(pts ? [{ k: 'Points best moves add', me: `+${Math.max(0, myGain)}`, them: `+${Math.max(0, theirGain)}` }] : []),
+    ...(p && o.projected !== undefined ? [
+      { k: 'Projected final, rosters as they are', me: String(p.me.projected), them: String(o.projected) },
+      { k: 'If you both make your best moves', me: String(p.me.withMoves), them: String(o.projectedWithMoves ?? o.projected) },
+    ] : []),
+  ].map((r) => {
+    const a = parseFloat(r.me.replace('+', '')), b = parseFloat(r.them.replace('+', ''));
+    return Number.isFinite(a) && Number.isFinite(b) && a !== b ? { ...r, meWins: a > b, themWins: b > a } : r;
+  });
+  const last = p && o.projectedWithMoves !== undefined ? p.me.withMoves - o.projectedWithMoves : null;
+  return (
+    <Panel
+      title={`You vs ${o.name}`}
+      sub={`Their side runs the same move engine as yours: their best starters held, the rest streamed, with their pickups left.${last !== null ? ` If you both play it right, you ${last >= 0 ? `win by about ${last}` : `lose by about ${-last}`}.` : ''}`}
+      className="mb-5"
+    >
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
+            <th className="pb-2 font-medium" />
+            <th className="pb-2 text-right font-medium">You</th>
+            <th className="pb-2 text-right font-medium">Them</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.k} className="border-t border-line">
+              <td className="py-1.5 pr-2 text-muted">{r.k}</td>
+              <td className={`py-1.5 text-right tabular-nums ${r.meWins ? 'font-medium text-accent' : ''}`}>{r.me}</td>
+              <td className={`py-1.5 text-right tabular-nums ${r.themWins ? 'font-medium text-red-700' : ''}`}>{r.them}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </Panel>
   );
 }

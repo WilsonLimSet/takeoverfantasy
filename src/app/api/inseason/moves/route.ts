@@ -14,6 +14,7 @@ import { compareMatchupGames } from '@/lib/inseason/matchupGames';
 import { espnAddUrl } from '@/lib/inseason/email';
 import { logPicks, overallRecord, trackRecord } from '@/lib/inseason/pickLog';
 import { kvStore } from '@/lib/inseason/storage';
+import { opponentOutlook } from '@/lib/inseason/opponent';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -94,5 +95,6 @@ export async function GET() {
     snapshotAge: Date.now() - snapshot.fetchedAt,
     record,
     overall,
+    opponent: opponentOutlook(snapshot),
   });
 }
