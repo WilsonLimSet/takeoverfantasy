@@ -6,7 +6,7 @@ import { funnel } from '@/components/funnel';
 import { useCallback, useEffect, useState } from 'react';
 import type { DailyBriefing } from '@/types';
 import { InjuryBadge } from '@/components/ui';
-import { BridgePanel, EdgeCard, MatchupGamesPanel, MoveRow, StatStrip, WatchlistPanel, type MovesPreview, type MovesResponse } from './MovesPanel';
+import { BridgePanel, EdgeCard, TrackRecordPanel, MatchupGamesPanel, MoveRow, StatStrip, WatchlistPanel, type MovesPreview, type MovesResponse } from './MovesPanel';
 import { ErrorBox, formatAge, Gate, invalidateCached, Loading, MOVES_URL, Panel, SaveLeague, useCached, useMeContext } from './useMe';
 
 function RosterAlerts({ briefing }: { briefing: DailyBriefing }) {
@@ -148,16 +148,16 @@ export default function ThisWeekPage() {
         <StatStrip plan={plan} mg={mg} />
       </div>
       <EdgeCard plan={plan} espnUrl={moves.espnUrl} />
-      {plan.bridge && <BridgePanel bridge={plan.bridge} addsLeft={plan.addsLeft} espnUrl={moves.espnUrl} />}
+      {plan.bridge && <BridgePanel bridge={plan.bridge} addsLeft={plan.addsLeft} espnUrl={moves.espnUrl} mode={plan.mode} />}
 
       <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
         <div className="space-y-5">
           <Panel
             title="Why these moves"
-            sub={plan.moves.length ? 'Each move assumes the ones above it are made. Dots: days his game makes your lineup.' : undefined}
+            sub={plan.moves.length ? `Each move assumes the ones above it are made. Dots: days his game makes your lineup.${plan.mode?.note && plan.mode.kind !== 'even' ? ` ${plan.mode.note}` : ''}` : undefined}
           >
             {plan.moves.length ? (
-              plan.moves.map((m) => <MoveRow key={m.add.id} m={m} />)
+              plan.moves.map((m) => <MoveRow key={m.add.id} m={m} mode={plan.mode?.kind} />)
             ) : (
               <p className="text-sm text-muted">No add/drop beats your current roster this week. Sit tight.</p>
             )}
@@ -179,6 +179,7 @@ export default function ThisWeekPage() {
         </div>
         <div className="space-y-5">
           {briefing && <RosterAlerts briefing={briefing} />}
+          {plan.pointsLeague && <TrackRecordPanel record={moves.record} overall={moves.overall} />}
           <WatchlistPanel notes={plan.watchlist} />
         </div>
       </div>

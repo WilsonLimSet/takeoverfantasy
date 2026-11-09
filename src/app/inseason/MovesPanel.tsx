@@ -4,6 +4,8 @@ import type { MatchupGamesComparison, MatchupSideGames } from '@/types';
 import Link from 'next/link';
 import { Fragment } from 'react';
 import type { MoveDay, StreamingPlan, StreamMove, WatchlistNote } from '@/lib/inseason/streaming';
+import type { GameRange } from '@/lib/inseason/gameLogs';
+import type { PickTrackRecord } from '@/lib/inseason/pickLog';
 import { Headshot, InjuryBadge, TeamLogo } from '@/components/ui';
 import { Panel } from './useMe';
 
@@ -18,6 +20,8 @@ export interface MovesResponse {
   needs?: 'signin' | 'pro' | 'connect' | 'refresh';
   /** Without a pass: what the moves would add this week, and the best one. */
   preview?: MovesPreview;
+  record?: PickTrackRecord | null;
+  overall?: PickTrackRecord | null;
 }
 
 export interface MovesPreview {
@@ -55,6 +59,16 @@ function Who({ id, name, team, meta, tone }: { id: number; name: string; team?: 
 }
 
 const fmt = (n: number) => n.toLocaleString('en-US');
+
+/** "Usually 15–40 pts · under half his average 1 game in 5": the range behind the average. */
+export function rangeText(r: GameRange): string {
+  const bust = r.bust >= 0.05 ? `under half his average about 1 game in ${Math.max(2, Math.round(1 / r.bust))}` : 'rarely under half his average';
+  return `Usually ${r.low}–${r.high} pts a game · ${bust}`;
+}
+
+function CloseChip() {
+  return <span className="ml-1.5 rounded bg-sunken px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-fg" title="The next option projects about the same. Either is a fine pick.">Close call</span>;
+}
 
 /**
  * A move's days: filled dot when his game makes your lineup, hollow when he plays but sits, blank
@@ -193,7 +207,7 @@ export function EdgeCard({ plan, espnUrl }: { plan: StreamingPlan; espnUrl?: str
   );
 }
 
-export function MoveRow({ m }: { m: StreamMove }) {
+export function MoveRow({ m, mode }: { m: StreamMove; mode?: StreamingPlan['mode']['kind'] }) {
   return (
     <div className="border-t border-line py-3 first:border-t-0 first:pt-0 last:pb-0">
       <div className="grid grid-cols-[1fr_auto] items-center gap-3 sm:grid-cols-[1fr_1fr_auto]">
@@ -234,6 +248,16 @@ export function MoveRow({ m }: { m: StreamMove }) {
         {m.reason}
       </p>
       {m.hold && <p className="mt-1 text-xs font-medium text-fg">{m.hold}</p>}
+      {m.add.range && <p className="mt-1 text-xs text-muted">{m.add.name}: {rangeText(m.add.range).replace(/^U/, 'u')}.</p>}
+      {m.runnerUp && m.runnerUp.pointsGain > m.pointsGain + 0.5 ? (
+        <p className="mt-1 text-xs text-muted">
+          {m.close && <CloseChip />} Ranked over {m.runnerUp.name} (+{Math.round(m.runnerUp.pointsGain)} projected): {mode === 'chase' ? 'more upside when you need to catch up' : 'a safer floor while you’re ahead'}.
+        </p>
+      ) : m.close && m.runnerUp ? (
+        <p className="mt-1 text-xs text-muted">
+          <CloseChip /> {m.runnerUp.name} adds about the same (+{Math.round(m.runnerUp.pointsGain)}). Either is a fine pick.
+        </p>
+      ) : null}
       {m.nextWeekWarning && <p className="mt-1 text-xs font-medium text-red-700">{m.nextWeekWarning}</p>}
       {m.keepWarning && <p className="mt-1 text-xs font-medium text-red-700">{m.keepWarning}</p>}
     </div>
@@ -404,7 +428,7 @@ const dayList = (dates: string[]) => {
  * The turn of the week: free agents who play the week's last days and early next week, so one
  * pickup covers both. Shown only in the last couple of days of a matchup.
  */
-export function BridgePanel({ bridge, addsLeft, espnUrl }: { bridge: NonNullable<StreamingPlan['bridge']>; addsLeft: number | null; espnUrl?: string }) {
+export function BridgePanel({ bridge, addsLeft, espnUrl, mode }: { bridge: NonNullable<StreamingPlan['bridge']>; addsLeft: number | null; espnUrl?: string; mode?: StreamingPlan['mode'] }) {
   if (!bridge.picks.length) return null;
   const now = bridge.days.filter((d) => !d.next).map((d) => d.date);
   const early = bridge.days.filter((d) => d.next).map((d) => d.date);
@@ -412,7 +436,7 @@ export function BridgePanel({ bridge, addsLeft, espnUrl }: { bridge: NonNullable
   return (
     <Panel
       title={`Plays ${dayList(now)} and early next week`}
-      sub={`Your week ends ${dayLabel(now[now.length - 1])}. Each of these plays then and on ${dayList(early)}, so one pickup counts for both weeks.${addsLeft !== null ? ' Your pickup limit resets next week.' : ''} Free agents only: add now.`}
+      sub={`Your week ends ${dayLabel(now[now.length - 1])}. Each of these plays then and on ${dayList(early)}, so one pickup counts for both weeks.${addsLeft !== null ? ' Your pickup limit resets next week.' : ''} Free agents only: add now.${mode?.note ? ` ${mode.note}` : ''}`}
       right={espnUrl ? <a href={espnUrl} target="_blank" rel="noopener noreferrer" className="btn-accent">Add on ESPN</a> : undefined}
       className="mb-5"
     >
@@ -424,6 +448,7 @@ export function BridgePanel({ bridge, addsLeft, espnUrl }: { bridge: NonNullable
               <div className="flex items-center gap-1.5 truncate text-sm">
                 <span className="truncate font-medium">{p.player.name}</span>
                 <InjuryBadge s={p.player.status} />
+                {p.close && <CloseChip />}
               </div>
               <div className="flex items-center gap-1 text-xs text-muted">
                 {p.player.nbaTeamAbbrev && <TeamLogo team={p.player.nbaTeamAbbrev} size={12} />}
@@ -431,6 +456,7 @@ export function BridgePanel({ bridge, addsLeft, espnUrl }: { bridge: NonNullable
                   {p.player.fppg} pts/game{p.player.gamesNext !== undefined ? ` · ${p.player.gamesNext} games next week` : ''} · drop {p.drop}
                 </span>
               </div>
+              {p.player.range && <div className="truncate text-xs text-muted">{rangeText(p.player.range)}</div>}
             </div>
             <div className="hidden shrink-0 gap-1 sm:flex" aria-label="Games by day">
               {p.days.map((d, i) => (
@@ -451,8 +477,43 @@ export function BridgePanel({ bridge, addsLeft, espnUrl }: { bridge: NonNullable
         ))}
       </ul>
       <p className="mt-3 border-t border-line pt-2.5 text-xs text-muted">
-        Points he adds in your lineup over {dayList(now)} and {dayList(early).replace(' or ', ' and ')}. Dots: filled when his game makes your lineup. After {dayLabel(early[early.length - 1])} you can swap him for next week&apos;s best pickup.
+        Points he adds in your lineup over {dayList(now)} and {dayList(early).replace(' or ', ' and ')}. Dots: filled when his game makes your lineup. One game is a coin flip: the range is what a normal night looks like. After {dayLabel(early[early.length - 1])} you can swap him for next week&apos;s best pickup.
       </p>
+    </Panel>
+  );
+}
+
+/** How our past picks did: our #1 against the option we ranked next, graded after the games. */
+export function TrackRecordPanel({ record, overall }: { record?: PickTrackRecord | null; overall?: PickTrackRecord | null }) {
+  const pct = (r: PickTrackRecord) => Math.round((100 * r.beatNext) / r.graded);
+  return (
+    <Panel title="Our track record" sub="Every day we log our top pickup and the next option, then grade both after the games.">
+      {record && record.graded > 0 ? (
+        <>
+          <p className="text-sm">
+            Our #1 outscored our #2 in <span className="font-medium tabular-nums">{record.beatNext} of {record.graded}</span> picks for your team ({pct(record)}%).
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            Our #1s scored {fmt(record.scored)} pts against {fmt(record.expected)} projected
+            {record.avgPlace !== undefined ? `, finishing #${record.avgPlace} on average among the options we listed` : ''}.
+          </p>
+          <ul className="mt-2 space-y-1 text-xs">
+            {record.recent.map((x) => (
+              <li key={`${x.date}${x.pick}`} className="flex justify-between gap-2">
+                <span className="truncate text-muted">{dayLabel(x.date)} · {x.pick} <span className="text-fg tabular-nums">{x.got}</span> vs {x.next} <span className="text-fg tabular-nums">{x.nextGot}</span></span>
+                <span className={x.got >= x.nextGot ? 'text-accent' : 'text-red-700'}>{x.got >= x.nextGot ? 'Right' : 'Wrong'}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : (
+        <p className="text-sm text-muted">No graded picks yet. The first grades show up the day after their games.</p>
+      )}
+      {overall && overall.graded >= 10 && (
+        <p className="mt-3 border-t border-line pt-2.5 text-xs text-muted">
+          All leagues: our #1 beat our #2 in {overall.beatNext} of {overall.graded} ({pct(overall)}%).
+        </p>
+      )}
     </Panel>
   );
 }

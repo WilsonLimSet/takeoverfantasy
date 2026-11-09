@@ -10,6 +10,7 @@ import type { FreeAgentEntry, LeagueSnapshot, MatchupWeekSchedule, Player, Playe
 import { chanceOn } from './availability';
 import { currentPeriod } from './matchupGames';
 import { boostOn, longBoost, teammateBoosts, type TeammateBoost } from './opportunity';
+import { gameRange, type GameRange } from './gameLogs';
 
 const BENCH_SLOT = 12;
 const IR_SLOT = 13;
@@ -26,6 +27,22 @@ const BRIDGE_DAYS_LEFT = 2;
 /** Next week's first days that a turn-of-the-week pickup should also play. */
 const BRIDGE_NEXT_DAYS = 2;
 const BRIDGE_PICKS = 6;
+/**
+ * Behind or ahead by more than this share of the opponent's projection (or MODE_MIN_POINTS),
+ * pickups are ranked for upside or for safety instead of on average alone.
+ */
+const MODE_MARGIN = 0.04;
+const MODE_MIN_POINTS = 15;
+/** How many standard deviations of a pickup's spread the ranking adds (chase) or takes off (protect). */
+const TILT = 0.5;
+/** Behind at the turn of the week: how much next week's early games count in a pick's ranking. */
+const CHASE_NEXT_WEEK = 0.5;
+/** A typical player's bad and good game (1 in 5 each) as a share of his average. */
+const TYPICAL_LOW = 0.55;
+const TYPICAL_HIGH = 1.45;
+/** Two options this close (points, or share of the better one) are called a close call. */
+const CLOSE_POINTS = 5;
+const CLOSE_SHARE = 0.1;
 
 /** Chance he plays tonight from the tag alone (the lineup check, which has no return dates). */
 const PLAY_CHANCE: Partial<Record<PlayerStatus, number>> = {
@@ -57,7 +74,15 @@ export interface StreamPlayer {
   gamesNext?: number;
   /** Extra minutes while teammates are out, e.g. "+6 min with Stephen Curry out (back about Oct 29)". */
   opportunity?: string;
+  /** What one game from him usually looks like, from his game logs (gameLogs.ts). */
+  range?: GameRange;
 }
+
+/**
+ * chase: behind, so pickups rank on upside (a high ceiling is what flips a matchup). protect:
+ * ahead, so they rank on a safe floor. even: on average.
+ */
+export type PickMode = 'chase' | 'protect' | 'even';
 
 export interface StreamMove {
   drop: StreamPlayer;
@@ -86,6 +111,12 @@ export interface StreamMove {
   addDays: MoveDay[];
   /** The dropped player's games you give up (ones he'd have started). */
   dropDays: MoveDay[];
+  /** Scoring periods the pickup's games count. */
+  addPeriods?: number[];
+  /** The best other pickup for this spot, for the record and the close-call flag. */
+  runnerUp?: { id: number; name: string; fppg: number; pointsGain: number; periods: number[] };
+  /** The runner-up is about as good: either is a fine pick. */
+  close?: boolean;
 }
 
 /** One day of a move's strip: game = his team plays and he's on your roster; counts = he starts. */
@@ -137,6 +168,8 @@ export interface StreamingPlan {
   warnings: string[];
   /** Near the week's end: pickups who play the last days and early next week. */
   bridge?: BridgePlan;
+  /** How pickups are ranked given the score: projected margin is mine minus theirs. */
+  mode: { kind: PickMode; margin?: number; note?: string };
 }
 
 /**
@@ -145,7 +178,7 @@ export interface StreamingPlan {
  */
 export interface BridgePlan {
   /** The days shown: this week's game days left, then next week's first days. */
-  days: { date: string; next: boolean }[];
+  days: { date: string; next: boolean; period: number }[];
   picks: BridgePickup[];
 }
 
@@ -158,6 +191,8 @@ export interface BridgePickup {
   early: number;
   /** One per shown day: his team plays, and whether that game makes your lineup. */
   days: { game: boolean; counts: boolean }[];
+  /** The next pick is about as good. */
+  close?: boolean;
 }
 
 export interface FreeAgentNote {
@@ -396,6 +431,51 @@ export function buildStreamingPlan(snapshot: LeagueSnapshot, core: number[], wat
 
   const baseline = simulateWeek(roster, week, today, slots, asOf);
   const minGain = pointsLeague ? MIN_POINTS_GAIN : 1;
+
+  // Each player's usual range per game, from his game logs.
+  const rangeOf = (c: Candidate) => (pointsLeague ? gameRange(snapshot.gameLogs?.[c.player.id], valueOn(c, asOf)) : undefined);
+  const describeR = (...args: Parameters<typeof describe>): StreamPlayer => {
+    const range = rangeOf(args[0]);
+    return range ? { ...describe(...args), range } : describe(...args);
+  };
+
+  // The score decides how pickups are ranked: behind, a high ceiling is what flips the matchup;
+  // ahead, a safe floor protects it. Points so far plus each side's best lineups for the days left.
+  const game = snapshot.matchups.find((m) => m.isMyMatchup && m.week === snapshot.week);
+  const oppId = game && (game.homeTeamId === me.id ? game.awayTeamId : game.homeTeamId);
+  const opp = snapshot.teams.find((t) => t.id === oppId);
+  let score: { mine: number; theirs: number; oppLeft: number } | undefined;
+  let mode: StreamingPlan['mode'] = { kind: 'even' };
+  if (game && opp?.roster && pointsLeague) {
+    const mine = game.homeTeamId === me.id ? game.homePoints : game.awayPoints ?? 0;
+    const theirs = game.homeTeamId === me.id ? game.awayPoints ?? 0 : game.homePoints;
+    const oppRoster: Candidate[] = opp.roster
+      .filter((e) => e.lineupSlotId !== IR_SLOT)
+      .map((e) => ({ player: e.player, value: valueOf(e.player), from: today, boosts: boosts.get(e.player.id), returnDate: returnOf(e.player.id) }));
+    score = { mine, theirs, oppLeft: simulateWeek(oppRoster, week, today, slots, asOf).points };
+    const margin = Math.round(mine + baseline.points - (theirs + score.oppLeft));
+    const need = Math.max(MODE_MIN_POINTS, MODE_MARGIN * (theirs + score.oppLeft));
+    mode =
+      margin < -need
+        ? { kind: 'chase', margin, note: `You're projected to lose by ${-margin}. Pickups are ranked for upside: a player who can go off beats a steady one when you need to catch up.` }
+        : margin > need
+          ? { kind: 'protect', margin, note: `You're projected to win by ${margin}. Pickups are ranked for a safe floor: a dud hurts more than a big game helps.` }
+          : { kind: 'even', margin, note: `Projected within ${Math.round(need)} pts either way. Pickups are ranked on average.` };
+  }
+  /**
+   * Ranking adjustment for a pickup's games this week. A game's spread (sd) comes from his range
+   * (the 20th to 80th percentile is about 1.68 sd); n games spread by sd * sqrt(n). Chasing ranks
+   * on the gain plus half that spread, protecting on the gain minus it.
+   */
+  const tilt = (c: Candidate, games: number) => {
+    if (mode.kind === 'even' || games <= 0) return 0;
+    const v = valueOn(c, asOf);
+    // Without a game log, a typical player's spread, so a missing log neither helps nor hurts.
+    const r = rangeOf(c) ?? { low: v * TYPICAL_LOW, high: v * TYPICAL_HIGH };
+    const spread = (TILT * Math.max(0, r.high - r.low) / 1.68) * Math.sqrt(games);
+    return mode.kind === 'chase' ? spread : -spread;
+  };
+  const isClose = (a: number, b: number) => a - b < Math.max(CLOSE_POINTS, CLOSE_SHARE * Math.abs(a));
   const limit = snapshot.acquisitions?.limit ?? null;
   const addsLeft = limit === null ? null : Math.max(0, limit - (snapshot.acquisitions?.used ?? 0));
 
@@ -413,8 +493,10 @@ export function buildStreamingPlan(snapshot: LeagueSnapshot, core: number[], wat
    */
   function bestSwap(current: Candidate[], drops: Candidate[], adds: Candidate[]) {
     const before = simulateWeek(current, week!, today, slots, asOf);
-    type Swap = { drop: Candidate; add: Candidate; swapDay: number; roster: Candidate[]; result: WeekResult; gain: number };
-    let best: Swap | null = null;
+    // key: the gain with the score's tilt on the pickup's started games (chase/protect).
+    type Swap = { drop: Candidate; add: Candidate; swapDay: number; roster: Candidate[]; result: WeekResult; gain: number; key: number };
+    // The best swap for each pickup, so the runner-up is a different player.
+    const byAdd = new Map<number, Swap>();
     for (const drop of drops) {
       const rest = current.filter((c) => c.player.id !== drop.player.id);
       const days = [...new Set(swapDays(drop))].sort((a, b) => a - b);
@@ -425,19 +507,26 @@ export function buildStreamingPlan(snapshot: LeagueSnapshot, core: number[], wat
           const roster = day === today ? [...rest, timedAdd] : [...rest, { ...drop, until: day }, timedAdd];
           const result = simulateWeek(roster, week!, today, slots, asOf);
           const gain = result.points - before.points;
-          if (!pick || gain > pick.gain + 1) pick = { drop, add: timedAdd, swapDay: day, roster, result, gain };
+          if (!pick || gain > pick.gain + 1) pick = { drop, add: timedAdd, swapDay: day, roster, result, gain, key: 0 };
         }
-        if (pick && (!best || pick.gain > best.gain)) best = pick;
+        if (!pick) continue;
+        pick.key = pick.gain + tilt(add, pick.result.usableById.get(add.player.id) ?? 0);
+        const had = byAdd.get(add.player.id);
+        if (!had || pick.key > had.key) byAdd.set(add.player.id, pick);
       }
     }
-    return best ? { ...best, before, current } : null;
+    // The tilt only reorders swaps that are worth making on average; below that, plain gain.
+    const all = [...byAdd.values()];
+    const worth = all.filter((s) => s.gain >= minGain).sort((a, b) => b.key - a.key);
+    const [best, second] = worth.length ? [worth[0], worth[1] ?? all.filter((s) => s !== worth[0]).sort((a, b) => b.gain - a.gain)[0]] : all.sort((a, b) => b.gain - a.gain);
+    return best ? { ...best, second, before, current } : null;
   }
 
   function toMove(s: NonNullable<ReturnType<typeof bestSwap>>): StreamMove {
     const fa = pool.get(s.add.player.id);
     const usableGamesGain = s.result.usableGames - s.before.usableGames;
-    const add = describe(s.add, week!, today, s.result.usableById.get(s.add.player.id) ?? 0, asOf, s.add.from, next);
-    const drop = describe(s.drop, week!, today, s.before.usableById.get(s.drop.player.id) ?? 0, asOf, today, next);
+    const add = describeR(s.add, week!, today, s.result.usableById.get(s.add.player.id) ?? 0, asOf, s.add.from, next);
+    const drop = describeR(s.drop, week!, today, s.before.usableById.get(s.drop.player.id) ?? 0, asOf, today, next);
     const extra = usableGamesGain > 0 ? `+${usableGamesGain} usable game${usableGamesGain === 1 ? '' : 's'}. ` : '';
     const minutes = add.opportunity ? ` ${add.name}: ${add.opportunity}.` : '';
     let reason = `${extra}${add.name} starts ${add.usableLeft} of his ${add.gamesLeft} games left; ${drop.name} starts ${drop.usableLeft} of ${drop.gamesLeft}.${minutes}`;
@@ -497,7 +586,21 @@ export function buildStreamingPlan(snapshot: LeagueSnapshot, core: number[], wat
       const gone = d.scoringPeriodId >= s.swapDay;
       return { date: d.date, game: gone && plays(s.drop, d.scoringPeriodId), counts: gone && !!s.before.startedByDay.get(d.scoringPeriodId)?.has(s.drop.player.id) };
     });
+    const startedIn = (r: WeekResult, id: number) => [...r.startedByDay].filter(([, ids]) => ids.has(id)).map(([p]) => p).sort((a, b) => a - b);
+    const second = s.second;
+    const runnerUp = second && second.gain > 0
+      ? {
+          id: second.add.player.id,
+          name: second.add.player.name,
+          fppg: Math.round(valueOn(second.add, asOf) * 10) / 10,
+          pointsGain: Math.round(second.gain * 10) / 10,
+          periods: startedIn(second.result, second.add.player.id),
+        }
+      : undefined;
     return {
+      addPeriods: startedIn(s.result, s.add.player.id),
+      runnerUp,
+      close: !!second && second.gain > 0 && isClose(s.key, second.key),
       addDays,
       dropDays,
       kind,
@@ -550,16 +653,8 @@ export function buildStreamingPlan(snapshot: LeagueSnapshot, core: number[], wat
 
   // The matchup's projected final: points so far plus each side's best lineups for the days left.
   let matchup: MatchupProjection | undefined;
-  const game = snapshot.matchups.find((m) => m.isMyMatchup && m.week === snapshot.week);
-  const oppId = game && (game.homeTeamId === me.id ? game.awayTeamId : game.homeTeamId);
-  const opp = snapshot.teams.find((t) => t.id === oppId);
-  if (game && opp?.roster && pointsLeague) {
-    const mine = game.homeTeamId === me.id ? game.homePoints : game.awayPoints ?? 0;
-    const theirs = game.homeTeamId === me.id ? game.awayPoints ?? 0 : game.homePoints;
-    const oppRoster: Candidate[] = opp.roster
-      .filter((e) => e.lineupSlotId !== IR_SLOT)
-      .map((e) => ({ player: e.player, value: valueOf(e.player), from: today, boosts: boosts.get(e.player.id), returnDate: returnOf(e.player.id) }));
-    const oppLeft = simulateWeek(oppRoster, week, today, slots, asOf).points;
+  if (score && opp) {
+    const { mine, theirs, oppLeft } = score;
     matchup = {
       opponentName: opp.name,
       me: { now: Math.round(mine), projected: Math.round(mine + baseline.points), withMoves: Math.round(mine + after.points) },
@@ -594,12 +689,12 @@ export function buildStreamingPlan(snapshot: LeagueSnapshot, core: number[], wat
     const fa = pool.get(id);
     if (rosterIds.has(id)) {
       const c = roster.find((r) => r.player.id === id)!;
-      watchlist.push({ player: { ...describe(c, week, today, baseline.usableById.get(id) ?? 0, asOf, today, next), onWaivers: false }, rostered: true });
+      watchlist.push({ player: { ...describeR(c, week, today, baseline.usableById.get(id) ?? 0, asOf, today, next), onWaivers: false }, rostered: true });
     } else if (fa) {
       const c = toCandidate(fa);
       const s = bestSwap(roster, droppable, [c]);
       watchlist.push({
-        player: { ...describe(c, week, today, s?.result.usableById.get(id) ?? 0, asOf, c.from, next), onWaivers: !!fa.onWaivers },
+        player: { ...describeR(c, week, today, s?.result.usableById.get(id) ?? 0, asOf, c.from, next), onWaivers: !!fa.onWaivers },
         bestMove: s && s.gain > 0 ? toMove(s) : undefined,
         rostered: false,
       });
@@ -611,7 +706,7 @@ export function buildStreamingPlan(snapshot: LeagueSnapshot, core: number[], wat
     const fa = pool.get(c.player.id);
     return {
       player: {
-        ...describe(c, week, today, s?.result.usableById.get(c.player.id) ?? 0, asOf, c.from, next),
+        ...describeR(c, week, today, s?.result.usableById.get(c.player.id) ?? 0, asOf, c.from, next),
         onWaivers: !!fa?.onWaivers,
         percentOwned: fa?.player.ownership?.percentOwned,
       },
@@ -629,7 +724,7 @@ export function buildStreamingPlan(snapshot: LeagueSnapshot, core: number[], wat
     const early: MatchupWeekSchedule = { days: next.days.slice(0, BRIDGE_NEXT_DAYS), teamGames: next.teamGames };
     const plays = (c: Candidate, s: MatchupWeekSchedule, period: number) => (s.teamGames[c.player.nbaTeamId] ?? []).includes(period);
     const baseEarly = simulateWeek(roster, early, firstNext, slots, asOf);
-    const picks: BridgePickup[] = [];
+    const picks: (BridgePickup & { key: number })[] = [];
     for (const add of freeAgents) {
       if (add.delay || !early.days.some((d) => plays(add, early, d.scoringPeriodId))) continue;
       let best: { drop: Candidate; thisWeek: WeekResult; earlyWeek: WeekResult; gain: number; a: number; b: number } | null = null;
@@ -647,7 +742,10 @@ export function buildStreamingPlan(snapshot: LeagueSnapshot, core: number[], wat
       if (!best || best.a < minGain || !(best.thisWeek.usableById.get(add.player.id) ?? 0) || !(best.earlyWeek.usableById.get(add.player.id) ?? 0)) continue;
       const fa = pool.get(add.player.id);
       picks.push({
-        player: { ...describe(add, week, today, best.thisWeek.usableById.get(add.player.id) ?? 0, asOf, today, next), percentOwned: fa?.player.ownership?.percentOwned },
+        // The score's tilt applies to this week's games only: next week starts at 0-0. Behind,
+        // tonight decides this week, so next week's early games count half.
+        key: best.a + (mode.kind === 'chase' ? CHASE_NEXT_WEEK : 1) * best.b + tilt(add, best.thisWeek.usableById.get(add.player.id) ?? 0),
+        player: { ...describeR(add, week, today, best.thisWeek.usableById.get(add.player.id) ?? 0, asOf, today, next), percentOwned: fa?.player.ownership?.percentOwned },
         drop: best.drop.player.name,
         pointsGain: Math.round(best.gain),
         thisWeek: Math.round(best.a),
@@ -658,10 +756,14 @@ export function buildStreamingPlan(snapshot: LeagueSnapshot, core: number[], wat
         ],
       });
     }
-    picks.sort((x, y) => y.pointsGain - x.pointsGain);
+    picks.sort((x, y) => y.key - x.key);
+    const shown = picks.slice(0, BRIDGE_PICKS);
     bridge = {
-      days: [...gameDays.map((d) => ({ date: d.date, next: false })), ...early.days.map((d) => ({ date: d.date, next: true }))],
-      picks: picks.slice(0, BRIDGE_PICKS),
+      days: [
+        ...gameDays.map((d) => ({ date: d.date, next: false, period: d.scoringPeriodId })),
+        ...early.days.map((d) => ({ date: d.date, next: true, period: d.scoringPeriodId })),
+      ],
+      picks: shown.map(({ key, ...p }, i) => ({ ...p, close: i + 1 < shown.length && isClose(key, shown[i + 1].key) })),
     };
   }
 
@@ -680,7 +782,7 @@ export function buildStreamingPlan(snapshot: LeagueSnapshot, core: number[], wat
     moves,
     core: [...coreIds],
     coreIsDefault,
-    droppable: droppable.map((c) => describe(c, week, today, baseline.usableById.get(c.player.id) ?? 0, asOf, today, next)),
+    droppable: droppable.map((c) => describeR(c, week, today, baseline.usableById.get(c.player.id) ?? 0, asOf, today, next)),
     watchlist,
     freeAgents: faNotes.slice(0, 40),
     fillsDays,
@@ -688,5 +790,6 @@ export function buildStreamingPlan(snapshot: LeagueSnapshot, core: number[], wat
     coreCost,
     warnings,
     bridge,
+    mode,
   };
 }

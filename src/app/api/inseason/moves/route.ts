@@ -12,6 +12,8 @@ import { freshSnapshot } from '@/lib/inseason/refreshLeague';
 import { buildStreamingPlan, expectedFppg } from '@/lib/inseason/streaming';
 import { compareMatchupGames } from '@/lib/inseason/matchupGames';
 import { espnAddUrl } from '@/lib/inseason/email';
+import { logPicks, overallRecord, trackRecord } from '@/lib/inseason/pickLog';
+import { kvStore } from '@/lib/inseason/storage';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -60,6 +62,14 @@ export async function GET() {
     return NextResponse.json({ success: false, error: 'No league data yet. Hit Refresh to load it.', needs: 'refresh' }, { status: 404 });
   }
   const plan = buildStreamingPlan(snapshot, ctx.core, watchlist?.playerIds ?? []);
+  // Log today's ranked picks (first look of the day), then read back how past ones did.
+  const kv = kvStore();
+  const date = new Date(snapshot.fetchedAt).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+  if (plan) await logPicks(kv, ctx.leagueId, ctx.seasonId, ctx.myTeamId, date, plan).catch((e) => console.warn('[moves] log picks', e));
+  const [record, overall] = await Promise.all([
+    trackRecord(kv, ctx.leagueId, ctx.seasonId, ctx.myTeamId).catch(() => null),
+    overallRecord(kv).catch(() => null),
+  ]);
   const me = snapshot.teams.find((t) => t.id === snapshot.myTeamId);
   const roster = (me?.roster ?? [])
     .map((e) => ({
@@ -81,5 +91,7 @@ export async function GET() {
     teamName: me?.name,
     espnUrl: espnAddUrl(String(ctx.leagueId), ctx.myTeamId),
     snapshotAge: Date.now() - snapshot.fetchedAt,
+    record,
+    overall,
   });
 }
