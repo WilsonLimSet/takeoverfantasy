@@ -5,7 +5,6 @@ import { funnel } from '@/components/funnel';
 import Link from 'next/link';
 import { Skeleton, SkeletonRows } from '@/components/ui';
 import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore } from 'react';
-import { supabaseBrowser } from '@/lib/supabase/browser';
 import { AUTH_ON } from '@/lib/supabase/env';
 
 export interface MeProfile {
@@ -348,7 +347,7 @@ export function SaveLeague({ next = '/inseason/connect#alerts', compact }: { nex
   const send = async (e: React.FormEvent) => {
     e.preventDefault();
     setState('sending');
-    const { error } = await supabaseBrowser().auth.signInWithOtp({ email: email.trim(), options: { emailRedirectTo: signInCallback(next) } });
+    const { error } = await (await import('@/lib/supabase/browser')).supabaseBrowser().auth.signInWithOtp({ email: email.trim(), options: { emailRedirectTo: signInCallback(next) } });
     if (error) { setState('error'); setMsg(error.message); return; }
     setState('sent');
     track('save_league_email');

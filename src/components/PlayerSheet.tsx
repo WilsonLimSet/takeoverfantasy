@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { League, Valued, fantasyPoints, tierLabel } from "@/lib/engine";
 import { playerInsights, playerNotes } from "@/lib/insights";
@@ -8,10 +8,7 @@ import { useScouting } from "@/lib/scouting";
 import type { StatLine } from "@/lib/types";
 import { AvoidButton, Headshot, InjuryBadge, StarButton, TeamLogo, espnRankFor, fmt } from "./ui";
 
-const Ctx = createContext<((v: Valued) => void) | null>(null);
-
-/** Opens the player profile panel; null outside the provider. */
-export const usePlayerSheet = () => useContext(Ctx);
+import { PlayerSheetCtx as Ctx } from "./playerSheetContext";
 
 export function PlayerSheetProvider({ league, children }: { league: League; children: React.ReactNode }) {
   const [open, setOpen] = useState<Valued | null>(null);

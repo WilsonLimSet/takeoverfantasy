@@ -1,7 +1,7 @@
 'use client';
 
-import { Headshot, TeamLogo } from '@/components/ui';
-import type { LeagueRotationEntry, RotationKind, RotationResponse } from '@/lib/rotation';
+import { Headshot, SkeletonRows, TeamLogo } from '@/components/ui';
+import { isRoleDown as isDown, isRoleUp as isUp, type LeagueRotationEntry, type RotationKind, type RotationResponse } from '@/lib/rotationKinds';
 import { Panel, useCached } from './useMe';
 
 export const ROTATION_URL = '/api/inseason/rotation';
@@ -14,10 +14,6 @@ const LABEL: Record<RotationKind, string> = {
   down: 'Minutes down',
   benched: 'Out of rotation',
 };
-const UP: RotationKind[] = ['up', 'grown', 'opening'];
-const DOWN: RotationKind[] = ['down', 'benched'];
-const isUp = (e: LeagueRotationEntry) => UP.includes(e.kind) || (e.kind === 'news' && /^Role up/.test(e.note));
-const isDown = (e: LeagueRotationEntry) => DOWN.includes(e.kind) || (e.kind === 'news' && /^Role down/.test(e.note));
 const available = (e: LeagueRotationEntry) => e.where === 'free' || e.where === 'waivers';
 const rank = (e: LeagueRotationEntry) => (e.fptsRecent || 0) + (e.kind === 'up' ? 6 : e.kind === 'grown' ? 4 : 0) + (e.because ? 0 : 3);
 
@@ -63,6 +59,8 @@ function Section({ title, rows, empty }: { title: string; rows: LeagueRotationEn
  */
 export function RotationPanel({ compact = false }: { compact?: boolean }) {
   const { data } = useCached<RotationResponse>(ROTATION_URL);
+  // Hold its space while loading so the table below doesn't jump when it arrives.
+  if (!data && !compact) return <Panel title="Rotation watch" className="mb-5"><SkeletonRows rows={4} /></Panel>;
   if (!data?.success || !data.entries) return null;
   const all = data.entries;
   const pickups = all.filter((e) => available(e) && isUp(e) && e.kind !== 'opening').sort((a, b) => rank(b) - rank(a));

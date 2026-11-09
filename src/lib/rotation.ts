@@ -6,6 +6,8 @@ import type { LeagueSnapshot } from "@/types";
 import { boxLines, easternDate } from "./social";
 import type { Player } from "./types";
 import { valueContext, valuePlayer } from "./value";
+import type { LeagueRotationEntry, RotationEntry, RotationReport } from "./rotationKinds";
+export * from "./rotationKinds";
 
 /**
  * What coaches are doing with their rotations, from the nightly box scores (`social:minutes:<date>`,
@@ -26,56 +28,9 @@ const NIGHTS = 16;
 /** Games that count as "now". */
 const RECENT = 3;
 const DAY = 864e5;
+/** Rebuilt every couple of hours: late games finish, and injuries (the openings) change during the day. */
 const REBUILD_MS = 2 * 60 * 60 * 1000;
-
-export type RotationKind = "up" | "opening" | "grown" | "down" | "benched" | "news";
-
-export interface RotationEntry {
-  id: number;
-  name: string;
-  team: string;
-  pos: string;
-  kind: RotationKind;
-  /** Minutes in his last games he was available for, newest first (0 = coach's decision). */
-  recent: number[];
-  /** Minutes a game before that (the earlier games in the window, or the season if too few). */
-  before: number;
-  season: number;
-  /** Fantasy points a game he played, last 3 vs before (ESPN standard scoring). */
-  fptsRecent: number;
-  fptsBefore: number;
-  pctOwned: number;
-  /** The injured teammate whose absence explains it, and when he's due back. */
-  because?: { name: string; until: string; minutes: number };
-  /** One line for the card. */
-  note: string;
-  /** The news behind a "news" entry. */
-  headline?: string;
-}
-
-/** An entry placed in a user's league (/api/inseason/rotation). */
-export type RotationWhere = "mine" | "free" | "waivers" | "taken";
-export interface LeagueRotationEntry extends RotationEntry {
-  where: RotationWhere;
-  /** The fantasy team that has him, when taken. */
-  owner?: string;
-  gamesLeft?: number;
-  gamesNext?: number;
-}
-export interface RotationResponse {
-  success: boolean;
-  night?: string;
-  entries?: LeagueRotationEntry[];
-  error?: string;
-  needs?: string;
-}
-
-export interface RotationReport {
-  /** The last night of box scores it's built from. */
-  night: string;
-  builtAt: number;
-  entries: RotationEntry[];
-}
+const CACHE_KEY = "rotation:latest";
 
 interface Night { date: string; min: Record<string, number>; fpts: Record<string, number>; dnp: Record<string, string> | null }
 /** One team game: minutes (0 = benched by the coach), or null when he wasn't available. */
@@ -183,6 +138,9 @@ function classify(p: Player, games: Game[], hurt: boolean, now: number, dep?: De
 
 export async function rotationReport(now = Date.now()): Promise<RotationReport | null> {
   const kv = kvStore();
+  // The last build, if it's recent: one read instead of 48 and a live box-score fetch.
+  const hit = await kv.get<RotationReport>(CACHE_KEY).catch(() => null);
+  if (hit && now - hit.builtAt < REBUILD_MS && now >= hit.builtAt) return hit;
   const dates = Array.from({ length: NIGHTS }, (_, i) => easternDate(now - (i + 1) * DAY));
   const load = (d: string) => Promise.all([
     kv.get<Record<string, number>>(`social:minutes:${d}`).catch(() => null),
@@ -200,11 +158,6 @@ export async function rotationReport(now = Date.now()): Promise<RotationReport |
   const first = saved.findIndex(([m]) => m && Object.keys(m).length);
   if (first < 0) return null;
   const night = dates[first];
-  // One report per night of box scores, rebuilt every couple of hours: late games finish, and
-  // injuries (the openings) change during the day.
-  const cacheKey = `rotation:${night}`;
-  const hit = await kv.get<RotationReport>(cacheKey).catch(() => null);
-  if (hit && now - hit.builtAt < REBUILD_MS) return hit;
 
   const nights: Night[] = dates
     .map((date, i) => ({ date, min: saved[i][0] ?? {}, fpts: saved[i][1] ?? {}, dnp: saved[i][2] }))
@@ -231,7 +184,7 @@ export async function rotationReport(now = Date.now()): Promise<RotationReport |
     if (takers.length) e.note += ` Meanwhile ${takers.map((x) => `${x.name} is up to ${Math.round(avg(x.recent))}`).join(" and ")}.`;
   }
   const report: RotationReport = { night, builtAt: now, entries };
-  await kv.set(cacheKey, report).catch(() => {});
+  await kv.set(CACHE_KEY, report).catch(() => {});
   return report;
 }
 
@@ -257,6 +210,3 @@ export function placeInLeague(report: RotationReport, snapshot: LeagueSnapshot |
     };
   });
 }
-
-export const isRoleUp = (e: RotationEntry) => e.kind === "up" || e.kind === "grown" || e.kind === "opening" || (e.kind === "news" && /^Role up/.test(e.note));
-export const isRoleDown = (e: RotationEntry) => e.kind === "down" || e.kind === "benched" || (e.kind === "news" && /^Role down/.test(e.note));

@@ -2,7 +2,6 @@
 
 import Script from "next/script";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { supabaseBrowser } from "@/lib/supabase/browser";
 
 const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
 
@@ -31,7 +30,7 @@ export function GoogleButton({ onDone, onError, fallback }: { onDone: () => void
       nonce: await sha256(nonce),
       use_fedcm_for_button: true,
       callback: async ({ credential }: { credential: string }) => {
-        const { error } = await supabaseBrowser().auth.signInWithIdToken({ provider: "google", token: credential, nonce });
+        const { error } = await (await import('@/lib/supabase/browser')).supabaseBrowser().auth.signInWithIdToken({ provider: "google", token: credential, nonce });
         if (error) onError(error.message); else onDone();
       },
     });

@@ -1,8 +1,8 @@
 "use client";
 
-import { Valued, League } from "@/lib/engine";
+import type { Valued, League } from "@/lib/engine";
 import { TakeBadge } from "./Take";
-import { usePlayerSheet } from "./PlayerSheet";
+import { usePlayerSheet } from "./playerSheetContext";
 import { toggleAvoid, toggleStar, useAvoid, useStars } from "@/lib/stars";
 import { headshotUrl, teamLogoUrl } from "@/lib/espnImages";
 
