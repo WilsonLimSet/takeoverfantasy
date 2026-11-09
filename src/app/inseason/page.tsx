@@ -6,7 +6,7 @@ import { funnel } from '@/components/funnel';
 import { useCallback, useEffect, useState } from 'react';
 import type { DailyBriefing } from '@/types';
 import { InjuryBadge } from '@/components/ui';
-import { BridgePanel, EdgeCard, HeadToHead, TrackRecordPanel, MatchupGamesPanel, MoveRow, StatStrip, WatchlistPanel, type MovesPreview, type MovesResponse } from './MovesPanel';
+import { BridgePanel, EdgeCard, HeadToHead, TrackRecordPanel, MoveRow, StatStrip, WatchlistPanel, type MovesPreview, type MovesResponse } from './MovesPanel';
 import { SchedulePanel } from './SchedulePanel';
 import { RotationPanel } from './RotationPanel';
 import { ErrorBox, formatAge, Gate, isGated, invalidateCached, Loading, MOVES_URL, Panel, ROTATION_URL, SaveLeague, useCached, useMeContext } from './useMe';
@@ -180,7 +180,6 @@ export default function ThisWeekPage() {
             </Link>
           )}
           {me && !me.signedIn && me.guest && <SaveLeague />}
-          {mg && <MatchupGamesPanel data={mg} />}
         </div>
         <div className="space-y-5">
           {briefing && <RosterAlerts briefing={briefing} />}

@@ -2,7 +2,7 @@
 
 import type { MatchupGamesComparison } from '@/types';
 import type { StreamingPlan } from '@/lib/inseason/streaming';
-import { InjuryBadge, TeamLogo } from '@/components/ui';
+import { Headshot, InjuryBadge, TeamLogo } from '@/components/ui';
 import { Panel } from './useMe';
 
 const dayLabel = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
@@ -65,12 +65,17 @@ export function SchedulePanel({ data, plan }: { data: MatchupGamesComparison; pl
             {rows.map(({ p, v, next }) => (
               <tr key={p.playerId} className={`border-t border-line align-top ${p.injured ? 'opacity-50' : ''}`}>
                 <td className="py-1.5 pr-2">
-                  <div className="flex max-w-[14rem] items-center gap-1 truncate sm:max-w-none">
-                    {p.nbaTeamAbbrev && <TeamLogo team={p.nbaTeamAbbrev} size={12} />}
-                    <span className="truncate">{p.name}</span>
-                    <InjuryBadge s={p.status} />
+                  <div className="flex items-center gap-2">
+                    <Headshot id={p.playerId} name={p.name} size={28} />
+                    <div className="min-w-0">
+                      <div className="flex max-w-[14rem] items-center gap-1 sm:max-w-none">
+                        <span className="truncate">{p.name}</span>
+                        {p.nbaTeamAbbrev && <TeamLogo team={p.nbaTeamAbbrev} size={12} />}
+                        <InjuryBadge s={p.status} />
+                      </div>
+                      <div className={`text-xs ${v.tone === 'act' ? 'font-medium text-accent' : v.tone === 'keep' ? 'text-fg' : 'text-muted'}`}>{v.text}</div>
+                    </div>
                   </div>
-                  <div className={`text-xs ${v.tone === 'act' ? 'font-medium text-accent' : v.tone === 'keep' ? 'text-fg' : 'text-muted'}`}>{v.text}</div>
                 </td>
                 {p.playsByDay.map((plays, i) => (
                   <td key={i} className={`py-1.5 text-center ${i < left[0] ? 'opacity-30' : ''}`}>

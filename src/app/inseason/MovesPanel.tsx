@@ -298,23 +298,6 @@ const openByDay = (side: MatchupSideGames, data: Pick<MatchupGamesComparison, 'd
   data.days.map((d, i) => (d.scoringPeriodId < data.today || data.teamsPlaying?.[i] === 0 ? null : data.startingSlots - side.startableByDay[i]));
 
 /** "20 open lineup spots left: Thu 8, Fri 2, Sat 4, Sun 6", and which days are already full. */
-function OpenSummary({ side, data }: { side: MatchupSideGames; data: MatchupGamesComparison }) {
-  const days = openByDay(side, data).map((open, i) => ({ date: data.days[i].date, open, benched: side.playingByDay[i] - side.startableByDay[i] })).filter((x) => x.open !== null);
-  const total = days.reduce((s, x) => s + (x.open ?? 0), 0);
-  const full = days.filter((x) => x.benched > 0);
-  const day = (date: string) => dayLabel(date).slice(0, 3);
-  if (!total) return <p className="mb-4 text-sm text-muted">Your lineup is full every day left this week: a pickup only helps if he beats someone who starts.</p>;
-  return (
-    <p className="mb-4 text-sm">
-      <span className="font-medium">{total} open lineup spots left</span>
-      <span className="text-muted">
-        {`: ${days.filter((x) => x.open! > 0).map((x) => `${day(x.date)} ${x.open}`).join(', ')}. A pickup adds a game on each of those days he plays.`}
-        {full.length ? ` ${full.map((x) => `${day(x.date)} is full (${x.benched} on the bench)`).join(', ')}, so games there add nothing.` : ''}
-      </span>
-    </p>
-  );
-}
-
 function SideTable({ side, data }: { side: MatchupSideGames; data: MatchupGamesComparison }) {
   const { days, today, startingSlots } = data;
   const open = openByDay(side, data);
@@ -335,9 +318,13 @@ function SideTable({ side, data }: { side: MatchupSideGames; data: MatchupGamesC
         <tbody>
           {side.players.map((p) => (
             <tr key={p.playerId} className={`border-t border-line ${p.injured ? 'opacity-40' : ''}`}>
-              <td className="max-w-[10rem] truncate py-1.5 pr-2">
-                {p.name}
-                <InjuryBadge s={p.status} />
+              <td className="py-1.5 pr-2">
+                <div className="flex max-w-[12rem] items-center gap-1.5">
+                  <Headshot id={p.playerId} name={p.name} size={22} />
+                  <span className="truncate">{p.name}</span>
+                  {p.nbaTeamAbbrev && <TeamLogo team={p.nbaTeamAbbrev} size={12} />}
+                  <InjuryBadge s={p.status} />
+                </div>
               </td>
               <td className={`py-1.5 text-right tabular-nums font-medium ${p.games >= 4 ? 'text-accent' : p.games <= 2 ? 'text-red-700' : ''}`}>{p.games}</td>
               {p.playsByDay.map((plays, i) => (
@@ -382,10 +369,9 @@ export function MatchupGamesPanel({ data }: { data: MatchupGamesComparison }) {
   return (
     <Panel
       title="Games this week"
-      sub={`Usable games: who can actually start each day, fitted into your ${startingSlots} lineup spots by position (PG, SG, SF, PF, C, G, F, UTIL). Injured and IR players don’t count.`}
+      sub={`Who can start each day in your ${startingSlots} spots. Green open spots are where a pickup adds games.`}
       right={range}
     >
-      <OpenSummary side={me} data={data} />
       <div className={`grid gap-6 ${opponent ? 'lg:grid-cols-2' : ''}`}>
         <SideTable side={me} data={data} />
         {opponent && <SideTable side={opponent} data={data} />}
