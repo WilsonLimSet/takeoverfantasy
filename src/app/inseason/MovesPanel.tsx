@@ -301,13 +301,15 @@ const openByDay = (side: MatchupSideGames, data: Pick<MatchupGamesComparison, 'd
 function SideTable({ side, data }: { side: MatchupSideGames; data: MatchupGamesComparison }) {
   const { days, today, startingSlots } = data;
   const open = openByDay(side, data);
+  // Red: misses 3+ of the game nights left.
+  const gameNights = days.filter((_, i) => (data.teamsPlaying?.[i] ?? 1) > 0).length;
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
             <th className="pb-2 font-medium">{side.name}</th>
-            <th className="pb-2 text-right font-medium">G</th>
+            <th className="pb-2 text-right font-medium" title="Games left">Left</th>
             {days.map((d) => (
               <th key={d.scoringPeriodId} className={`w-8 pb-2 text-center font-medium ${d.scoringPeriodId < today ? 'opacity-40' : ''}`}>
                 {dayLabel(d.date).slice(0, 2)}
@@ -326,7 +328,7 @@ function SideTable({ side, data }: { side: MatchupSideGames; data: MatchupGamesC
                   <InjuryBadge s={p.status} />
                 </div>
               </td>
-              <td className={`py-1.5 text-right tabular-nums font-medium ${p.games >= 4 ? 'text-accent' : p.games <= 2 ? 'text-red-700' : ''}`}>{p.games}</td>
+              <td className={`py-1.5 text-right tabular-nums font-medium ${p.games >= 4 ? 'text-accent' : gameNights - p.games >= 3 ? 'text-red-700' : ''}`}>{p.games}</td>
               {p.playsByDay.map((plays, i) => (
                 <td key={i} className="py-1.5 text-center">
                   {plays ? <span className="inline-block h-1.5 w-1.5 rounded-full bg-fg" /> : <span className="text-line">·</span>}
@@ -368,14 +370,14 @@ export function MatchupGamesPanel({ data }: { data: MatchupGamesComparison }) {
   const range = days.length ? `${dayLabel(days[0].date)} ${days[0].date.slice(5)} – ${dayLabel(days[days.length - 1].date)} ${days[days.length - 1].date.slice(5)}` : '';
   return (
     <Panel
-      title="Games this week"
+      title="Games left this week"
       sub={`Who can start each day in your ${startingSlots} spots. Green open spots are where a pickup adds games.`}
       right={range}
     >
-      <div className={`grid gap-6 ${opponent ? 'lg:grid-cols-2' : ''}`}>
+      {!days.length ? <p className="text-sm text-muted">No games left this week.</p> : <div className={`grid gap-6 ${opponent ? 'lg:grid-cols-2' : ''}`}>
         <SideTable side={me} data={data} />
         {opponent && <SideTable side={opponent} data={data} />}
-      </div>
+      </div>}
     </Panel>
   );
 }
