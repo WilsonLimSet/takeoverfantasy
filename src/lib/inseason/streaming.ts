@@ -172,7 +172,7 @@ export interface StreamingPlan {
   fillsDays: string[];
   matchup?: MatchupProjection;
   coreCost?: CoreCost;
-  /** Things that block or change your moves (an IR player who's no longer out, no pickups left). */
+  /** Things that block or change your moves (an IR player who's healthy or due back, no pickups left). */
   warnings: string[];
   /** Near the week's end: pickups who play the last days and early next week. */
   bridge?: BridgePlan;
@@ -699,16 +699,18 @@ function computePlan(snapshot: LeagueSnapshot, core: number[], watchIds: number[
     .filter((d) => (after.startedByDay.get(d.scoringPeriodId)?.size ?? 0) > (baseline.startedByDay.get(d.scoringPeriodId)?.size ?? 0))
     .map((d) => d.date);
 
-  // Things that block moves. ESPN only lets "out" players sit on IR; once one isn't, it blocks adds
-  // until he's moved off (which takes a roster spot).
+  // IR players who need a roster spot soon. A day-to-day (or questionable/doubtful) player can stay on
+  // IR: ESPN still allowed adds with one there (Brandon Miller, Nov 2026). Only a player with no
+  // injury tag at all has to come off.
   const warnings: string[] = [];
+  const injuryTags: PlayerStatus[] = ['OUT', 'INJURY_RESERVE', 'SUSPENSION', 'DAY_TO_DAY', 'QUESTIONABLE', 'DOUBTFUL'];
   for (const e of me.roster.filter((e) => e.lineupSlotId === IR_SLOT)) {
     const back = returnOf(e.player.id);
     const name = e.player.name;
-    if (!['OUT', 'INJURY_RESERVE', 'SUSPENSION'].includes(e.player.status)) {
-      warnings.push(`${name} is on IR but no longer listed out, so ESPN blocks your adds until he's moved off IR. That needs a roster spot: plan who to drop.`);
+    if (!injuryTags.includes(e.player.status)) {
+      warnings.push(`${name} is on IR but no longer injured. ESPN won't keep a healthy player on IR, so plan a roster spot for him.`);
     } else if (back && back <= (week.days[week.days.length - 1]?.date ?? '')) {
-      warnings.push(`${name} is due back around ${dateLabel(back)}. When he comes off IR you'll need a roster spot, and ESPN blocks adds until you make one.`);
+      warnings.push(`${name} is due back around ${dateLabel(back)}. To play him you'll need a roster spot.`);
     }
   }
   if (addsLeft === 0) warnings.push('No pickups left this week: moves start again next week.');
