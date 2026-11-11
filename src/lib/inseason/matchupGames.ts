@@ -179,11 +179,16 @@ function sideGames(team: Team, week: MatchupWeekSchedule, today: number, slots: 
   };
 }
 
-/** Games this matchup week for my team and my opponent. */
+/**
+ * Games left this matchup week for my team and my opponent. Only today and the days after are
+ * included; once every game today is final (`dayDone`), today drops off too, since its points are
+ * already in the score.
+ */
 export function compareMatchupGames(snapshot: LeagueSnapshot): MatchupGamesComparison | undefined {
-  const week = snapshot.matchupWeek;
   const me = snapshot.teams.find((t) => t.id === snapshot.myTeamId);
-  if (!week || !me) return undefined;
+  if (!snapshot.matchupWeek || !me) return undefined;
+  const today = currentPeriod(snapshot);
+  const week = { ...snapshot.matchupWeek, days: snapshot.matchupWeek.days.filter((d) => d.scoringPeriodId >= today) };
 
   const matchup = snapshot.matchups.find((m) => m.isMyMatchup && m.week === snapshot.week);
   const opponentId = matchup && (matchup.homeTeamId === me.id ? matchup.awayTeamId : matchup.homeTeamId);
@@ -191,7 +196,6 @@ export function compareMatchupGames(snapshot: LeagueSnapshot): MatchupGamesCompa
   const slots = snapshot.startingSlots ?? 0;
   const lineup = slotList(snapshot.lineupSlots);
   const asOf = easternDate(snapshot.fetchedAt);
-  const today = currentPeriod(snapshot);
 
   return {
     week: snapshot.week,

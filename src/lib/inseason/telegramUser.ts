@@ -247,7 +247,7 @@ export function dailyTelegram(opts: {
     const say = (mine: number) => (mine >= p.opponent.projected ? `up ${mine - p.opponent.projected}` : `down ${p.opponent.projected - mine}`);
     lines.push(`Projected: ${p.me.projected} to ${p.opponent.projected} vs ${esc(p.opponentName)} (${say(p.me.projected)})${plan.moves.length ? `. With the moves: ${say(p.me.withMoves)}` : ''}`);
   } else if (matchup?.opponent) {
-    lines.push(`Usable games: you ${matchup.me.usableGames}, ${esc(matchup.opponent.name)} ${matchup.opponent.usableGames}`);
+    lines.push(`Usable games left: you ${matchup.me.usableGames}, ${esc(matchup.opponent.name)} ${matchup.opponent.usableGames}`);
   }
   if (o) {
     const adds = (n: number | null) => (n === null ? 'no limit' : String(n));

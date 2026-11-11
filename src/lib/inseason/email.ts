@@ -44,7 +44,7 @@ export function dailyEmail(opts: {
   const lines: string[] = [];
   const text: string[] = [];
   if (matchup?.opponent) {
-    const line = `Usable games this week: you ${matchup.me.usableGames}, ${matchup.opponent.name} ${matchup.opponent.usableGames}.`;
+    const line = `Usable games left this week: you ${matchup.me.usableGames}, ${matchup.opponent.name} ${matchup.opponent.usableGames}.`;
     lines.push(`<p style="margin:0 0 16px">${esc(line)}</p>`);
     text.push(line);
   }
