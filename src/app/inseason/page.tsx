@@ -150,7 +150,7 @@ export default function ThisWeekPage() {
         </div>
         <StatStrip plan={plan} mg={mg} />
       </div>
-      <EdgeCard plan={plan} espnUrl={moves.espnUrl} />
+      <EdgeCard plan={plan} espnUrl={moves.espnUrl} opp={moves.opponent} />
       {moves.opponent && <HeadToHead plan={plan} mg={mg} o={moves.opponent} />}
       {plan.bridge && <BridgePanel bridge={plan.bridge} addsLeft={plan.addsLeft} espnUrl={moves.espnUrl} mode={plan.mode} />}
 

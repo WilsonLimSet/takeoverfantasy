@@ -6,7 +6,7 @@
  */
 
 import type { LeagueSnapshot } from '@/types';
-import { buildStreamingPlan } from './streaming';
+import { buildStreamingPlan, type PlayerOutlook } from './streaming';
 
 export interface OpponentOutlook {
   name: string;
@@ -18,6 +18,10 @@ export interface OpponentOutlook {
   /** Points (points leagues) their best moves would add, and how many moves that takes. */
   pointsGain: number;
   moves: number;
+  /** Their best moves, in the engine's order: who they'd add and drop, and what each adds. */
+  /** Each of their players: games left, games he starts, points we expect. */
+  outlook?: PlayerOutlook[];
+  picks?: { addId: number; add: string; addTeam?: string; drop: string; gain: number; after?: string }[];
   /** Projected final: as rosters stand, and if they make the best moves. */
   projected?: number;
   projectedWithMoves?: number;
@@ -48,6 +52,8 @@ export function opponentOutlook(snapshot: LeagueSnapshot): OpponentOutlook | nul
     gamesWithMoves: plan.after.usableGames,
     pointsGain,
     moves: plan.moves.length,
+    outlook: plan.outlook,
+    picks: plan.moves.map((m) => ({ addId: m.add.id, add: m.add.name, addTeam: m.add.nbaTeamAbbrev, drop: m.drop.name, gain: Math.round(m.pointsGain), after: m.swapAfter?.label })),
     projected: plan.matchup?.me.projected,
     projectedWithMoves: plan.matchup?.me.withMoves,
   };
