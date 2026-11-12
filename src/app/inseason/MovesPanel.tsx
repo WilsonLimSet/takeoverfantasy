@@ -3,7 +3,7 @@
 import type { MatchupGamesComparison, MatchupSideGames } from '@/types';
 import Link from 'next/link';
 import { Fragment } from 'react';
-import type { MoveDay, StreamingPlan, StreamMove, WatchlistNote } from '@/lib/inseason/streaming';
+import type { MoveDay, PlayerOutlook, StreamingPlan, StreamMove, WatchlistNote } from '@/lib/inseason/streaming';
 import type { GameRange } from '@/lib/inseason/gameLogs';
 import type { PickTrackRecord } from '@/lib/inseason/pickLog';
 import type { OpponentOutlook } from '@/lib/inseason/opponent';
@@ -108,7 +108,7 @@ const whenLabel = (m: StreamMove) => (m.swapAfter ? `After ${dayLabel(m.swapAfte
  * The answer first: the moves to make, in order, each with when to make it and a backup if the
  * pickup is gone. Then what it does to the matchup, what the core list holds back, and blockers.
  */
-export function EdgeCard({ plan, espnUrl }: { plan: StreamingPlan; espnUrl?: string }) {
+export function EdgeCard({ plan, espnUrl, opp }: { plan: StreamingPlan; espnUrl?: string; opp?: OpponentOutlook | null }) {
   const gain = movesGain(plan);
   const m = plan.matchup;
   const unit = plan.pointsLeague ? 'pts' : 'games';
@@ -122,6 +122,10 @@ export function EdgeCard({ plan, espnUrl }: { plan: StreamingPlan; espnUrl?: str
   const backups = (mv: StreamMove) =>
     (plan.freeAgents ?? []).filter((f) => f.dropFor === mv.drop.name && !taken.has(f.player.id) && f.pointsGain > 0).slice(0, 2);
   const spare = plan.addsLeft === null ? null : plan.addsLeft - plan.moves.length;
+  // Their side if they use every pickup well: the margin that matters, and pickups we both want.
+  const theirBest = opp?.projectedWithMoves !== undefined && opp.projected !== undefined && opp.projectedWithMoves > opp.projected ? opp.projectedWithMoves : undefined;
+  const worst = m && theirBest !== undefined ? (plan.moves.length ? m.me.withMoves : m.me.projected) - theirBest : undefined;
+  const contested = new Map((opp?.picks ?? []).map((p) => [p.addId, p]));
   return (
     <div className="animate-fade-up mb-5 rounded-xl border border-line bg-panel px-5 py-4 shadow-[0_1px_2px_rgba(25,25,25,0.04)]">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -140,7 +144,14 @@ export function EdgeCard({ plan, espnUrl }: { plan: StreamingPlan; espnUrl?: str
             <p className="mt-0.5 text-sm text-muted">
               Projected {say(m.me.projected)} vs {m.opponentName}
               {plan.moves.length > 0 && <>, <span className="font-medium text-fg">{say(m.me.withMoves)}</span> with {plan.moves.length === 1 ? 'it' : 'them'}</>}.
-              {m.me.projected - m.opponent.projected >= 150 && ' You’re well ahead: only make moves you’d keep anyway.'}
+              {worst === undefined && m.me.projected - m.opponent.projected >= 150 && ' You’re well ahead: only make moves you’d keep anyway.'}
+            </p>
+          )}
+          {worst !== undefined && opp && (
+            <p className="mt-0.5 text-sm text-muted">
+              If {m!.opponentName} use {opp.moves === 1 ? 'their pickup' : `all ${opp.moves} pickups`} well ({opp.projected} → {theirBest}):{' '}
+              <span className={`font-medium ${worst >= 0 ? 'text-fg' : 'text-red-700'}`}>{worst >= 0 ? `you still win by about ${fmt(worst)}` : `you lose by about ${fmt(-worst)}`}</span>.
+              {worst >= 150 && ' Only make moves you’d keep anyway.'}
             </p>
           )}
         </div>
@@ -165,6 +176,11 @@ export function EdgeCard({ plan, espnUrl }: { plan: StreamingPlan; espnUrl?: str
                     </span>
                   </div>
                   {mv.hold && <p className="mt-0.5 text-xs text-muted">{mv.hold}</p>}
+                  {contested.has(mv.add.id) && (
+                    <p className="mt-0.5 text-xs font-medium text-red-700">
+                      {m?.opponentName ?? 'Your opponent'} want him too (their #{(opp!.picks ?? []).findIndex((p) => p.addId === mv.add.id) + 1} pickup){mv.swapAfter ? ': if you wait, he may be gone' : ': adding him takes him from them'}.
+                    </p>
+                  )}
                   {alt.length > 0 && (
                     <p className="mt-0.5 text-xs text-muted">
                       If he’s taken: {alt.map((f, j) => (
@@ -537,6 +553,15 @@ export function HeadToHead({ plan, mg, o }: { plan: StreamingPlan; mg?: MatchupG
     return Number.isFinite(a) && Number.isFinite(b) && a !== b ? { ...r, meWins: a > b, themWins: b > a } : r;
   });
   const last = p && o.projectedWithMoves !== undefined ? p.me.withMoves - o.projectedWithMoves : null;
+  const days = mg?.opponent ? mg.days : [];
+  const mine = plan.outlook ?? [];
+  const theirs = o.outlook ?? [];
+  const best = (l: PlayerOutlook[]) => [...l].filter((x) => x.points > 0).sort((a, b) => b.fppg - a.fppg)[0];
+  const lead = (x: PlayerOutlook | undefined, who: string) =>
+    x && x.points > 0
+      ? `${who} best player, ${x.name}, plays ${x.starts} more ${x.starts === 1 ? 'time' : 'times'} at about ${Math.round(x.fppg)} a game: expect about ${x.points}.`
+      : '';
+  const wd = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
   return (
     <Panel
       title={`You vs ${o.name}`}
@@ -561,6 +586,77 @@ export function HeadToHead({ plan, mg, o }: { plan: StreamingPlan; mg?: MatchupG
           ))}
         </tbody>
       </table>
+      {days.length > 0 && mg?.opponent && (
+        <table className="mt-4 w-full text-sm">
+          <thead>
+            <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
+              <th className="pb-2 font-medium">Starters playing</th>
+              {days.map((d) => <th key={d.date} className="pb-2 text-right font-medium">{wd(d.date)}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {[{ k: 'You', a: mg.me.startableByDay, b: mg.opponent.startableByDay }, { k: 'Them', a: mg.opponent.startableByDay, b: mg.me.startableByDay }].map((r) => (
+              <tr key={r.k} className="border-t border-line">
+                <td className="py-1.5 pr-2 text-muted">{r.k}</td>
+                {days.map((d, i) => (
+                  <td key={d.date} className={`py-1.5 text-right tabular-nums ${r.a[i] > r.b[i] ? (r.k === 'You' ? 'font-medium text-accent' : 'font-medium text-red-700') : ''}`}>{r.a[i]}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {(mine.length > 0 || theirs.length > 0) && (
+        <div className="mt-4 border-t border-line pt-3">
+          <p className="mb-2 text-sm">{lead(best(mine), 'Your')} {lead(best(theirs), 'Their')}</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {[{ k: 'You', list: mine }, { k: o.name, list: theirs }].map((side) => (
+              <div key={side.k}>
+                <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted">{side.k}: games × pts a game</p>
+                <ul className="text-sm">
+                  {side.list.map((x) => (
+                    <li key={x.id} className="flex justify-between gap-3 border-t border-line py-1">
+                      <span className="min-w-0 truncate">
+                        {x.name}
+                        {x.status !== 'ACTIVE' && <span className="text-red-700"> {x.status === 'DAY_TO_DAY' ? 'DTD' : x.status}</span>}
+                        <span className="text-muted">
+                          {' '}· {x.starts}{x.gamesLeft > x.starts ? ` of ${x.gamesLeft}` : ''} × {Math.round(x.fppg)}
+                        </span>
+                      </span>
+                      <span className={`shrink-0 tabular-nums ${x.points ? 'font-medium' : 'text-muted'}`}>{x.points || '–'}</span>
+                    </li>
+                  ))}
+                  <li className="flex justify-between gap-3 border-t border-line py-1 text-muted">
+                    <span>Total</span>
+                    <span className="tabular-nums">{side.list.reduce((t, x) => t + x.points, 0)}</span>
+                  </li>
+                </ul>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-muted">
+            Games he starts × our per-game projection (last games’ minutes × his points per minute), with injury odds counted. “2 of 3” means one game lands on a full night.
+          </p>
+        </div>
+      )}
+      {(o.picks?.length ?? 0) > 0 && (
+        <div className="mt-4 border-t border-line pt-3">
+          <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted">Their best moves</p>
+          <ol className="space-y-1 text-sm">
+            {o.picks!.map((x, i) => (
+              <li key={x.addId} className="flex justify-between gap-3">
+                <span>
+                  <span className="text-muted">{i + 1}. </span>
+                  Add <span className="font-medium">{x.add}</span>{x.addTeam ? <span className="text-muted"> ({x.addTeam})</span> : null}, drop {x.drop}
+                  {x.after && <span className="text-muted"> after {x.after}</span>}
+                </span>
+                <span className="shrink-0 tabular-nums text-muted">+{x.gain}</span>
+              </li>
+            ))}
+          </ol>
+          <p className="mt-2 text-xs text-muted">Their ceiling: the best moves our engine finds for them. Most managers won’t drop players this good.</p>
+        </div>
+      )}
     </Panel>
   );
 }

@@ -78,6 +78,19 @@ export interface StreamPlayer {
   range?: GameRange;
 }
 
+export interface PlayerOutlook {
+  id: number;
+  name: string;
+  nbaTeamAbbrev?: string;
+  status: PlayerStatus;
+  fppg: number;
+  gamesLeft: number;
+  /** Games left that make the lineup. */
+  starts: number;
+  /** Expected points from those starts (chance he plays counted). */
+  points: number;
+}
+
 /**
  * chase: behind, so pickups rank on upside (a high ceiling is what flips a matchup). protect:
  * ahead, so they rank on a safe floor. even: on average.
@@ -160,6 +173,8 @@ export interface StreamingPlan {
   baseline: { points: number; usableGames: number };
   /** After the suggested moves. */
   after: { points: number; usableGames: number };
+  /** Each rostered player's week as the roster stands: games left, games he starts, points we expect from them. */
+  outlook?: PlayerOutlook[];
   moves: StreamMove[];
   core: number[];
   /** true when the user hasn't picked core players and we assumed their best starters. */
@@ -373,6 +388,8 @@ interface WeekResult {
   points: number;
   usableGames: number;
   usableById: Map<number, number>;
+  /** Expected points each player adds from the games he starts. */
+  pointsById: Map<number, number>;
   /** Who starts each day (by scoring period). */
   startedByDay: Map<number, Set<number>>;
 }
@@ -381,6 +398,7 @@ function simulateWeek(roster: Candidate[], week: MatchupWeekSchedule, today: num
   let points = 0;
   let usableGames = 0;
   const usableById = new Map<number, number>();
+  const pointsById = new Map<number, number>();
   const startedByDay = new Map<number, Set<number>>();
   for (const day of week.days) {
     if (day.scoringPeriodId < today) continue;
@@ -391,13 +409,21 @@ function simulateWeek(roster: Candidate[], week: MatchupWeekSchedule, today: num
         (week.teamGames[c.player.nbaTeamId] ?? []).includes(day.scoringPeriodId)
     );
     const ahead = daysBetween(asOf, day.date);
-    const { total, started } = fillDay(playing, slots, (c) => valueOn(c, day.date) * chanceOn(c.player.status, c.returnDate, day.date, ahead));
+    const val = new Map<number, number>();
+    const { total, started } = fillDay(playing, slots, (c) => {
+      const v = valueOn(c, day.date) * chanceOn(c.player.status, c.returnDate, day.date, ahead);
+      val.set(c.player.id, v);
+      return v;
+    });
     points += total;
     usableGames += started.size;
-    for (const id of started) usableById.set(id, (usableById.get(id) ?? 0) + 1);
+    for (const id of started) {
+      usableById.set(id, (usableById.get(id) ?? 0) + 1);
+      pointsById.set(id, (pointsById.get(id) ?? 0) + (val.get(id) ?? 0));
+    }
     startedByDay.set(day.scoringPeriodId, started);
   }
-  return { points, usableGames, usableById, startedByDay };
+  return { points, usableGames, usableById, pointsById, startedByDay };
 }
 
 function gamesLeft(p: Player, week: MatchupWeekSchedule, from: number): number {
@@ -859,6 +885,12 @@ function computePlan(snapshot: LeagueSnapshot, core: number[], watchIds: number[
     core: [...coreIds],
     coreIsDefault,
     droppable: droppable.map((c) => describeR(c, week, today, baseline.usableById.get(c.player.id) ?? 0, asOf, today, next)),
+    outlook: roster
+      .map((c) => {
+        const d = describe(c, week, today, baseline.usableById.get(c.player.id) ?? 0, asOf, today, next);
+        return { id: d.id, name: d.name, nbaTeamAbbrev: d.nbaTeamAbbrev, status: d.status, fppg: d.fppg, gamesLeft: d.gamesLeft, starts: d.usableLeft, points: Math.round(baseline.pointsById.get(c.player.id) ?? 0) };
+      })
+      .sort((x, y) => y.points - x.points || y.fppg - x.fppg),
     watchlist,
     freeAgents: faNotes.slice(0, 40),
     fillsDays,
