@@ -58,7 +58,7 @@ export function SchedulePanel({ data, plan }: { data: MatchupGamesComparison; pl
               {days.map((d, i) => (
                 <th key={d.scoringPeriodId} className={`w-7 pb-2 text-center font-medium ${i < left[0] ? 'opacity-40' : ''}`}>{dayLabel(d.date).slice(0, 2)}</th>
               ))}
-              <th className="pb-2 pl-2 text-right font-medium" title="Games next matchup week">Next</th>
+              <th className="pb-2 pl-2 text-right font-medium" title="Games next matchup week">Next week</th>
             </tr>
           </thead>
           <tbody>
@@ -123,11 +123,11 @@ export function TeamGrid({ data }: { data: MatchupGamesComparison }) {
         <thead>
           <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
             <th className="pb-2 font-medium">Team</th>
-            <th className="pb-2 text-right font-medium">Left</th>
+            <th className="pb-2 text-right font-medium">Games left</th>
             {days.map((d, i) => (
               <th key={d.scoringPeriodId} className={`w-7 pb-2 text-center font-medium ${i < left[0] ? 'opacity-40' : ''}`}>{dayLabel(d.date).slice(0, 2)}</th>
             ))}
-            <th className="pb-2 pl-2 text-right font-medium">Next</th>
+            <th className="pb-2 pl-2 text-right font-medium" title="Games next matchup week">Next week</th>
             <th className="hidden pb-2 pl-3 font-medium sm:table-cell">Back-to-back</th>
           </tr>
         </thead>

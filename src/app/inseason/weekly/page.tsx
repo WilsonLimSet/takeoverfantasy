@@ -17,7 +17,7 @@ export default function SchedulePage() {
     <div className="space-y-5">
       <MatchupGamesPanel data={games} />
       {games.teams && (
-        <Panel title="NBA schedule this week" sub="Teams with the most games left are where streamers come from. Back-to-backs and next week’s games help time a pickup.">
+        <Panel title="NBA schedule this week" sub="Pick up players from teams at the top: more games left means more points this week. Next week is how many games they play in next week’s matchup, if you keep him.">
           <TeamGrid data={games} />
         </Panel>
       )}
