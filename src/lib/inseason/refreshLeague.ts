@@ -14,6 +14,7 @@ import { gradePicks, pendingPickIds } from './pickLog';
 import { expectedFppg } from './streaming';
 import { currentPeriod } from './matchupGames';
 import { kvStore } from './storage';
+import { rotationOf, sharedValueContext } from '@/lib/value';
 import type { LeagueContext } from './profile';
 import type { LeagueSnapshot, LeagueTransaction, SnapshotDiff, Watchlist } from '@/types';
 
@@ -41,6 +42,24 @@ async function finishedDay(at: number): Promise<string | undefined> {
   }
 }
 
+/**
+ * Each player's current role from the box scores (minutes, and minutes that lean on injured
+ * teammates), so the moves engine follows the rotation game by game. Without it the engine falls
+ * back to season minutes.
+ */
+async function addRotations(snapshot: LeagueSnapshot): Promise<void> {
+  try {
+    const vctx = await sharedValueContext();
+    const all = [...snapshot.teams.flatMap((t) => (t.roster ?? []).map((e) => e.player)), ...snapshot.freeAgentsTopN.map((f) => f.player)];
+    for (const p of all) {
+      const known = vctx.byId.get(p.id);
+      if (known) p.rotation = rotationOf(known, vctx);
+    }
+  } catch (e) {
+    console.warn('[refreshLeague] rotations failed:', e instanceof Error ? e.message : e);
+  }
+}
+
 export async function refreshLeague(ctx: LeagueContext): Promise<RefreshedLeague> {
   const [espnData, injuries] = await Promise.all([
     withLeague(ctx.espn, () => getLeagueSnapshot()),
@@ -60,7 +79,8 @@ export async function refreshLeague(ctx: LeagueContext): Promise<RefreshedLeague
   });
   if (injuries) snapshot.injuries = Object.fromEntries([...injuries].map(([id, e]) => [id, { returnDate: e.returnDate }]));
 
-  snapshot.dayDone = await finishedDay(snapshot.fetchedAt);
+  const [dayDone] = await Promise.all([finishedDay(snapshot.fetchedAt), addRotations(snapshot)]);
+  snapshot.dayDone = dayDone;
 
   // Game logs for the players a pick can involve: both rosters in my matchup, the best free
   // agents, and anyone in a logged pick still waiting for a grade. Ranges and grades only.

@@ -6,6 +6,7 @@ import { kvStore } from "./inseason/storage";
 import { easternDate, teamTips } from "./social";
 import { loadTakes, normName, type Take } from "./takes";
 import type { Player } from "./types";
+import type { PlayerRotation } from "@/types";
 import { isRookie, perGameCore } from "./valueCore";
 
 /**
@@ -23,6 +24,7 @@ import { isRookie, perGameCore } from "./valueCore";
 
 const OUT = new Set(["OUT", "INJURY_RESERVE", "SUSPENSION"]);
 const DAY = 864e5;
+const COACH = /coach/i;
 
 export interface ValueContext {
   now: number;
@@ -45,16 +47,24 @@ export interface ValueContext {
 export async function valueContext(now = Date.now()): Promise<ValueContext> {
   const kv = kvStore();
   const nights = Array.from({ length: 10 }, (_, i) => easternDate(now - (i + 1) * DAY));
-  const [{ players }, injuries, tips, health, takeSet, snaps] = await Promise.all([
+  const [{ players }, injuries, tips, health, takeSet, snaps, dnps] = await Promise.all([
     getPlayers(),
     injuryReport().catch(() => new Map<number, InjuryReportEntry>()),
     teamTips().catch(() => new Map<string, number[]>()),
     loadHealth(),
     loadTakes(),
     Promise.all(nights.map((d) => kv.get<Record<string, number>>(`social:minutes:${d}`).catch(() => null))),
+    Promise.all(nights.map((d) => kv.get<Record<string, string>>(`social:dnp:${d}`).catch(() => null))),
   ]);
+  // A coach's-decision DNP is a 0-minute game: the rotation moved past him. Injury and rest DNPs
+  // aren't counted at all.
   const recentMin = new Map<number, number[]>();
-  for (const snap of snaps) for (const [id, min] of Object.entries(snap ?? {})) if (min > 0) recentMin.set(Number(id), [...(recentMin.get(Number(id)) ?? []), min]);
+  snaps.forEach((snap, i) => {
+    const night = new Map<number, number>();
+    for (const [id, min] of Object.entries(snap ?? {})) if (min > 0) night.set(Number(id), min);
+    for (const [id, why] of Object.entries(dnps[i] ?? {})) if (COACH.test(why) && !night.has(Number(id))) night.set(Number(id), 0);
+    for (const [id, min] of night) recentMin.set(id, [...(recentMin.get(id) ?? []), min]);
+  });
   const nightList = nights.map((date, i) => ({ date, min: snaps[i] ?? {} })).filter((n) => Object.keys(n.min).length);
   return { now, players, byId: new Map(players.map((p) => [p.id, p])), injuries, tips, recentMin, nights: nightList, health, takes: takeSet.index };
 }
@@ -193,6 +203,38 @@ function dependence(p: Player, ctx: ValueContext): Dependence[] {
   return deps.sort((a, b) => a.until.localeCompare(b.until));
 }
 
+/** Share of his recent games each injured teammate already missed: that part is in his minutes now. */
+function absentShareOf(p: Player, ctx: ValueContext) {
+  const recentNights = ctx.nights.filter((n) => n.min[p.id] > 0).slice(0, 5);
+  return (d: Dependence) => (recentNights.length ? recentNights.filter((n) => !(n.min[d.id] > 0)).length / recentNights.length : 0);
+}
+
+/**
+ * His role from the box scores, for the in-season moves engine: expected minutes now (recent games,
+ * coach's-decision DNPs as 0) and the minutes that lean on injured teammates. The engine keeps its
+ * own points per minute, in the league's scoring.
+ */
+export function rotationOf(p: Player, ctx: ValueContext): PlayerRotation {
+  const { minutes } = perGameCore(p, (ctx.recentMin.get(p.id) ?? []).slice(0, 5), ctx.takes.get(normName(p.name)));
+  const absentShare = absentShareOf(p, ctx);
+  const r1 = (n: number) => Math.round(n * 10) / 10;
+  return {
+    minutes: r1(minutes),
+    deps: dependence(p, ctx).map((d) => ({ id: d.id, name: d.name, until: d.until, minutes: d.minutes, absentShare: Math.round(absentShare(d) * 100) / 100 })),
+  };
+}
+
+let shared: { at: number; ctx: Promise<ValueContext> } | null = null;
+/** One value context reused across league refreshes for a few minutes (the cron refreshes every league). */
+export function sharedValueContext(maxAgeMs = 10 * 60 * 1000): Promise<ValueContext> {
+  if (!shared || Date.now() - shared.at > maxAgeMs) {
+    const ctx = valueContext();
+    shared = { at: Date.now(), ctx };
+    ctx.catch(() => { shared = null; });
+  }
+  return shared.ctx;
+}
+
 export function valuePlayer(p: Player, ctx: ValueContext, window?: { from: string; to: string }): PlayerValue {
   const st = statusOf(p, ctx);
   const recent = (ctx.recentMin.get(p.id) ?? []).slice(0, 5);
@@ -207,8 +249,7 @@ export function valuePlayer(p: Player, ctx: ValueContext, window?: { from: strin
   // played without them recently; until they're back he gets the rest too, and after they
   // return he loses it all.
   const dependsOn = dependence(p, ctx);
-  const recentNights = ctx.nights.filter((n) => n.min[p.id] > 0).slice(0, 5);
-  const absentShare = (d: Dependence) => (recentNights.length ? recentNights.filter((n) => !(n.min[d.id] > 0)).length / recentNights.length : 0);
+  const absentShare = absentShareOf(p, ctx);
   const minutesOn = (date: string) => Math.max(0, minutes + dependsOn.reduce((m, d) => m + (date < d.until ? d.minutes * (1 - absentShare(d)) : -d.minutes * absentShare(d)), 0));
   const perGameAt = (t: number) => (minutes ? perGame * (minutesOn(easternDate(t)) / minutes) : perGame);
   const first = dependsOn[0];
