@@ -60,12 +60,16 @@ async function addRotations(snapshot: LeagueSnapshot): Promise<void> {
   }
 }
 
-/** Recent games that count as much as the season's points per minute. */
-const RECENT_RATE_K = 5;
+/**
+ * Recent games that count as much as the season's points per minute. Low: moves are for this week,
+ * so the last few games matter more than the season (Wilson: most pickups are short term). 5 games
+ * weigh about 70%, 3 games 60%. Rest-of-season values (value.ts) keep 5.
+ */
+const RECENT_RATE_K = 2;
 
 /**
  * His recent points per minute in this league's scoring (game logs over his recent box-score
- * minutes) against his season rate, blended half and half by 5 games: a bigger role brings more
+ * minutes) against his season rate, recent games weighted heavily (RECENT_RATE_K): a bigger role brings more
  * shots. Replaces the standard-scoring estimate from rotationOf when the logs are there.
  */
 function leagueRates(snapshot: LeagueSnapshot): void {
