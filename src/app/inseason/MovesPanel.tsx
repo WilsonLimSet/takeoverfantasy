@@ -544,7 +544,7 @@ export function HeadToHead({ plan, mg, o }: { plan: StreamingPlan; mg?: MatchupG
   const p = plan.matchup;
   const stats = [
     ...(p ? [{ k: 'Score now', me: p.me.now, them: p.opponent.now }, { k: 'Projected', me: p.me.projected, them: p.opponent.projected }] : []),
-    { k: 'Games left', me: plan.baseline.usableGames, them: o.games },
+    { k: 'Games that count', me: plan.baseline.usableGames, them: o.games },
     { k: 'Pickups left', me: adds(plan.addsLeft), them: adds(o.addsLeft) },
   ];
   const weekDays = mg?.days ?? [];
@@ -563,16 +563,34 @@ export function HeadToHead({ plan, mg, o }: { plan: StreamingPlan; mg?: MatchupG
       title={`You vs ${o.name}`}
       className="mb-5"
     >
-      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-line bg-line sm:grid-cols-4">
-        {stats.map((x) => (
-          <div key={x.k} className="bg-panel px-3 py-2">
-            <div className="text-[11px] uppercase tracking-wide text-muted">{x.k}</div>
-            <div className="text-base font-medium tabular-nums">
-              {x.me}<span className="text-muted"> – </span>{x.them}
-            </div>
+      {p && (
+        <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-3 text-center">
+          <div>
+            <div className="truncate text-xs text-muted">You</div>
+            <div className={`text-3xl font-medium tabular-nums tracking-tight ${p.me.now >= p.opponent.now ? '' : 'text-muted'}`}>{p.me.now}</div>
           </div>
-        ))}
-      </div>
+          <div className="pb-1.5 text-[11px] uppercase tracking-wide text-muted">Now</div>
+          <div>
+            <div className="truncate text-xs text-muted">{o.name}</div>
+            <div className={`text-3xl font-medium tabular-nums tracking-tight ${p.opponent.now > p.me.now ? '' : 'text-muted'}`}>{p.opponent.now}</div>
+          </div>
+        </div>
+      )}
+      <table className="mt-3 w-full text-sm">
+        <tbody>
+          {stats.filter((x) => x.k !== 'Score now').map((x) => {
+            const a = Number(x.me), b = Number(x.them);
+            const lead = Number.isFinite(a) && Number.isFinite(b) && a !== b ? (a > b ? 'me' : 'them') : null;
+            return (
+              <tr key={x.k} className="border-t border-line">
+                <td className={`w-1/3 py-1.5 text-left tabular-nums ${lead === 'me' ? 'font-semibold text-accent' : ''}`}>{x.me}</td>
+                <td className="py-1.5 text-center text-xs text-muted">{x.k}</td>
+                <td className={`w-1/3 py-1.5 text-right tabular-nums ${lead === 'them' ? 'font-semibold text-red-700' : ''}`}>{x.them}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
       {(mine.length > 0 || theirs.length > 0) && (
         <div className="mt-4 border-t border-line pt-3">
           <p className="mb-2 text-sm">{lead(best(mine), 'Your')} {lead(best(theirs), 'Their')}</p>
