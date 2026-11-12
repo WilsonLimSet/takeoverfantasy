@@ -4,44 +4,10 @@ import Link from 'next/link';
 import { track } from '@vercel/analytics';
 import { funnel } from '@/components/funnel';
 import { useCallback, useEffect, useState } from 'react';
-import type { DailyBriefing } from '@/types';
-import { InjuryBadge } from '@/components/ui';
-import { BridgePanel, EdgeCard, HeadToHead, TrackRecordPanel, MoveRow, StatStrip, WatchlistPanel, type MovesPreview, type MovesResponse } from './MovesPanel';
+import { BridgePanel, EdgeCard, HeadToHead, TrackRecordPanel, MoveRow, WatchlistPanel, type MovesPreview, type MovesResponse } from './MovesPanel';
 import { SchedulePanel } from './SchedulePanel';
 import { RotationPanel } from './RotationPanel';
 import { ErrorBox, formatAge, Gate, isGated, invalidateCached, Loading, MOVES_URL, Panel, ROTATION_URL, SaveLeague, useCached, useMeContext } from './useMe';
-
-function RosterAlerts({ briefing }: { briefing: DailyBriefing }) {
-  const changes = briefing.statusChanges.filter((c) => c.isMyPlayer);
-  const hurt = (briefing.myTeam.roster ?? []).filter((r) => r.player.status !== 'ACTIVE');
-  return (
-    <Panel title="Roster alerts">
-      {changes.length === 0 && hurt.length === 0 ? (
-        <p className="text-sm text-muted">Everyone on your roster is healthy.</p>
-      ) : (
-        <ul className="-my-1 text-sm">
-          {changes.map((c) => (
-            <li key={`c${c.playerId}`} className="border-t border-line py-2 first:border-t-0">
-              <span className="font-medium">{c.playerName}</span>
-              <span className="text-muted"> {c.previousStatus.replace(/_/g, ' ').toLowerCase()} → </span>
-              <InjuryBadge s={c.currentStatus} />
-              {c.currentStatus === 'ACTIVE' && <span className="text-accent">active</span>}
-            </li>
-          ))}
-          {hurt
-            .filter((r) => !changes.some((c) => c.playerId === r.playerId))
-            .map((r) => (
-              <li key={`h${r.playerId}`} className="border-t border-line py-2 first:border-t-0">
-                {r.player.name}
-                <InjuryBadge s={r.player.status} />
-                {r.lineupSlotId === 13 && <span className="ml-1.5 text-xs text-muted">on IR</span>}
-              </li>
-            ))}
-        </ul>
-      )}
-    </Panel>
-  );
-}
 
 /** A connected league without a pass: show what they're missing, give the best move away, then the plans. */
 function Preview({ p }: { p: MovesPreview }) {
@@ -85,12 +51,10 @@ function Preview({ p }: { p: MovesPreview }) {
 export default function ThisWeekPage() {
   const { me } = useMeContext();
   const { data: moves, reload: reloadMoves } = useCached<MovesResponse>(MOVES_URL);
-  const { data: briefingRes, reload: reloadBriefing } = useCached<{ success: boolean; briefing?: DailyBriefing }>('/api/inseason/briefing');
-  const briefing = briefingRes?.success ? briefingRes.briefing ?? null : null;
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => { await Promise.all([reloadMoves(), reloadBriefing()]); }, [reloadMoves, reloadBriefing]);
+  const load = useCallback(async () => { await reloadMoves(); }, [reloadMoves]);
 
   const refresh = async () => {
     setRefreshing(true);
@@ -136,7 +100,7 @@ export default function ThisWeekPage() {
   return (
     <div>
       {error && <ErrorBox>{error}</ErrorBox>}
-      <div className="mb-5 grid gap-6 lg:grid-cols-[1fr_auto] lg:items-end">
+      <div className="mb-5">
         <div>
           <h1 className="text-3xl font-medium leading-tight tracking-[-0.03em]">
             Week {plan.week}
@@ -148,31 +112,14 @@ export default function ThisWeekPage() {
             {refreshButton}
           </p>
         </div>
-        <StatStrip plan={plan} mg={mg} />
       </div>
       <EdgeCard plan={plan} espnUrl={moves.espnUrl} opp={moves.opponent} />
-      {moves.opponent && <HeadToHead plan={plan} mg={mg} o={moves.opponent} />}
+      {moves.opponent ? <HeadToHead plan={plan} mg={mg} o={moves.opponent} /> : mg && <div className="mb-5"><SchedulePanel data={mg} plan={plan} /></div>}
       {plan.bridge && <BridgePanel bridge={plan.bridge} addsLeft={plan.addsLeft} espnUrl={moves.espnUrl} mode={plan.mode} />}
 
       <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
         <div className="space-y-5">
-          <Panel
-            title="Why these moves"
-            sub={plan.moves.length ? `Each move assumes the ones above it are made. Dots: green, his game makes your lineup; red, a game you give up; black, the dropped player still plays it for you before the swap; hollow, plays but your lineup is full.${plan.mode?.note && plan.mode.kind !== 'even' ? ` ${plan.mode.note}` : ''}` : undefined}
-          >
-            {plan.moves.length ? (
-              plan.moves.map((m) => <MoveRow key={m.add.id} m={m} mode={plan.mode?.kind} />)
-            ) : (
-              <p className="text-sm text-muted">No add/drop beats your current roster this week. Sit tight.</p>
-            )}
-            <p className="mt-4 border-t border-line pt-3 text-xs text-muted">
-              Streaming spots: {plan.droppable.map((p) => (p.gamesNext !== undefined ? `${p.name} (${p.gamesNext} next wk)` : p.name)).join(', ') || 'none'}.{' '}
-              <Link href="/inseason/connect" className="underline hover:text-fg">
-                {plan.coreIsDefault ? 'Pick your core players' : 'Edit core players'}
-              </Link>
-            </p>
-          </Panel>
-          {mg && <SchedulePanel data={mg} plan={plan} />}
+          <RotationPanel compact />
           {me?.profile && !me.profile.telegram && me.telegramBot && (
             <Link href="/inseason/connect#alerts" className="flex items-center justify-between gap-3 rounded-xl border border-line bg-panel px-4 py-3 text-sm shadow-[0_1px_2px_rgba(25,25,25,0.04)] hover:border-fg/30">
               <span><span className="font-medium">Get these moves on Telegram each morning.</span> <span className="text-muted">Takes 10 seconds.</span></span>
@@ -182,10 +129,8 @@ export default function ThisWeekPage() {
           {me && !me.signedIn && me.guest && <SaveLeague />}
         </div>
         <div className="space-y-5">
-          {briefing && <RosterAlerts briefing={briefing} />}
-          <RotationPanel compact />
-          {plan.pointsLeague && <TrackRecordPanel record={moves.record} overall={moves.overall} />}
-          <WatchlistPanel notes={plan.watchlist} />
+          <WatchlistPanel notes={plan.watchlist.filter((w) => !plan.moves.some((m) => m.add.id === w.player.id))} />
+          {plan.pointsLeague && (moves.record?.graded ?? 0) > 0 && <TrackRecordPanel record={moves.record} overall={moves.overall} />}
         </div>
       </div>
     </div>

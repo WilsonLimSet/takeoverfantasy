@@ -15,7 +15,7 @@ type Verdict = { text: string; tone: 'act' | 'keep' | 'muted'; order: number };
  * (plays Mon and Tue, then nothing) is a free pickup after his last game: drop him that night for
  * someone who plays the days left. Players who play 4 games are the ones to hold.
  */
-export function SchedulePanel({ data, plan }: { data: MatchupGamesComparison; plan: StreamingPlan }) {
+export function SchedulePanel({ data, plan, teams = true }: { data: MatchupGamesComparison; plan: StreamingPlan; teams?: boolean }) {
   const { days, today, startingSlots, me } = data;
   const left = days.map((d, i) => (d.scoringPeriodId >= today ? i : -1)).filter((i) => i >= 0);
   if (!left.length) return null;
@@ -96,7 +96,7 @@ export function SchedulePanel({ data, plan }: { data: MatchupGamesComparison; pl
         </table>
       </div>
       <p className="mt-2 text-xs text-muted">Green dot: a game on a day you have an open spot. Streaming spots are players outside your core.</p>
-      {data.teams && (
+      {teams && data.teams && (
         <details className="mt-4 border-t border-line pt-3">
           <summary className="cursor-pointer text-sm font-medium">Every team’s schedule this week</summary>
           <TeamGrid data={data} />

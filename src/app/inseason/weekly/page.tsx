@@ -1,7 +1,7 @@
 'use client';
 
 import { MatchupGamesPanel, type MovesResponse } from '../MovesPanel';
-import { TeamGrid } from '../SchedulePanel';
+import { SchedulePanel, TeamGrid } from '../SchedulePanel';
 import { Gate, isGated, Loading, MOVES_URL, Panel, useCached } from '../useMe';
 
 /** Games in your matchup, then every NBA team's week. Read from the moves data This week already loads. */
@@ -15,6 +15,7 @@ export default function SchedulePage() {
   }
   return (
     <div className="space-y-5">
+      {data.plan && <SchedulePanel data={games} plan={data.plan} teams={false} />}
       <MatchupGamesPanel data={games} />
       {games.teams && (
         <Panel title="NBA schedule this week" sub="Pick up players from teams at the top: more games left means more points this week. Next week is how many games they play in next week’s matchup, if you keep him.">
