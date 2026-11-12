@@ -30,6 +30,8 @@ export interface TeammateBoost {
   dated: boolean;
   minutes: number;
   fppg: number;
+  /** Points per game it changes once he's back (negative: minutes he loses then). */
+  after?: number;
 }
 
 interface Projection {
@@ -119,7 +121,7 @@ export function teammateBoosts(snapshot: LeagueSnapshot, asOf: string, proj: Pro
 
 /** Points per game the boosts add on this date. */
 export const boostOn = (boosts: TeammateBoost[] | undefined, date: string) =>
-  (boosts ?? []).reduce((sum, b) => sum + (date < b.until ? b.fppg : 0), 0);
+  (boosts ?? []).reduce((sum, b) => sum + (date < b.until ? b.fppg : b.after ?? 0), 0);
 
 /** Points per game from absences of at least LONG_ABSENCE_DAYS, i.e. the part worth holding a player for. */
 export const longBoost = (boosts: TeammateBoost[] | undefined, asOf: string) =>

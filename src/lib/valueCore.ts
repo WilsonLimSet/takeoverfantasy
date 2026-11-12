@@ -24,11 +24,25 @@ const median = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); retu
  * his news (src/lib/autoTakes.ts); a role change (trade, starter's injury, rotation change) adjusts
  * the starting expectation, and his own games take over from it as they pile up.
  */
+/** Games this season after which the preseason projection no longer counts. */
+export const SEASON_GAMES = 3;
+
+/** Minutes from recent games (median, so one blowout doesn't swing it) and the season; points per minute from the season. */
+function fromSeason(cur: StatLine, recent: number[]) {
+  const minutes = recent.length >= 2 ? 0.6 * median(recent) + 0.4 * cur.min : cur.min;
+  const rate = (keep: (k: StatKey) => boolean) => fantasyPoints(part(cur, keep), SCORING) / cur.min;
+  const relPts = minutes * rate((k) => RELIABLE.includes(k)), scoPts = minutes * rate((k) => !RELIABLE.includes(k));
+  return { minutes, relPts, scoPts, perGame: Math.max(0, relPts + scoPts) };
+}
+
 export function perGameCore(p: Player, recent: number[] = [], take?: Take): { minutes: number; relPts: number; scoPts: number; perGame: number } {
   const base = p.proj?.min ? p.proj : p.last?.min ? p.last : null;
   const prior = base && take && (take.kind === "boost" || take.kind === "fade") && hasRoleChange(take) ? applyMult(base, take) : base;
   const cur = p.cur?.gp && p.cur.min ? p.cur : null;
   const gp = cur?.gp ?? 0;
+  // Once he has a few games this season, the preseason projection (and last season) stop counting:
+  // Wilson ranks on what's happening now.
+  if (cur && gp >= SEASON_GAMES) return fromSeason(cur, recent);
   const [kMin, kRel, kScore] = isRookie(p) ? [1, 2, 5] : [3, 3, 10];
 
   // Minutes: recent games (median, so one blowout doesn't swing it) and the season so far, then

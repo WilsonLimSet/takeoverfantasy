@@ -22,6 +22,24 @@ export interface Player {
     percentStarted: number;
   };
   stats?: PlayerSeasonStats;
+  /** His current role from the box scores (src/lib/value.ts `rotationOf`), added on refresh. */
+  rotation?: PlayerRotation;
+}
+
+/** Minutes from recent games, and the minutes that lean on injured teammates. */
+export interface PlayerRotation {
+  /** Expected minutes a game now (recent games, coach's-decision DNPs as 0). */
+  minutes: number;
+  deps: {
+    id: number;
+    name: string;
+    /** First US date the teammate is expected back. */
+    until: string;
+    /** Minutes a game he gains while the teammate is out. */
+    minutes: number;
+    /** Share of his recent games the teammate already missed (already in `minutes`). */
+    absentShare: number;
+  }[];
 }
 
 export interface PlayerSeasonStats {

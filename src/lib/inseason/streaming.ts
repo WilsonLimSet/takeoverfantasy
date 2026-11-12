@@ -239,16 +239,13 @@ export function expectedFppg(p: Player): number {
   const season = s.seasonAvg ?? 0;
   const gp = s.gamesPlayed ?? 0;
   const proj = s.projectedAvg ?? season;
-  if (gp <= 0 || !season) return proj;
-  if (s.seasonMin && s.projectedMin && proj) {
-    // Preseason projections can overrate a player per minute (Day'Ron Sharpe: 1.23 projected,
-    // 0.88 real), so real games take over by about game 3.
-    const perMin = blend(season / s.seasonMin, proj / s.projectedMin, gp / (gp + 3));
-    return expectedMinutes(p) * perMin;
-  }
+  if (gp <= 0 || !season) return p.rotation && s.projectedMin && proj ? p.rotation.minutes * (proj / s.projectedMin) : proj;
+  const perMin = pointsPerMinute(p);
+  if (perMin !== undefined) return expectedMinutes(p) * perMin;
   const recent = s.last15Avg || season;
   const played = 0.5 * recent + 0.5 * season;
-  const w = Math.min(1, gp / 10); // lean on the projection until about 10 games in
+  if (gp >= SEASON_GAMES) return played;
+  const w = gp / SEASON_GAMES;
   return w * played + (1 - w) * proj;
 }
 
@@ -260,12 +257,55 @@ const minutesWeight = (p: Player) => {
   return p.stats?.seasonMin && gp > 0 ? gp / (gp + 1.5) : 0;
 };
 
-/** Expected minutes per game: this season's minutes take over from the projection within a few games. */
+/**
+ * Fantasy points per minute in the league's scoring, from this season's games. The preseason
+ * projection only fills in before his third game (Wilson: once games are played, ignore it).
+ */
+function pointsPerMinute(p: Player): number | undefined {
+  const s = p.stats;
+  const season = s?.seasonAvg ?? 0, gp = s?.gamesPlayed ?? 0;
+  const proj = s?.projectedAvg ?? season;
+  if (!s?.seasonMin || !season || gp <= 0) return undefined;
+  if (gp >= SEASON_GAMES || !s.projectedMin || !proj) return season / s.seasonMin;
+  return blend(season / s.seasonMin, proj / s.projectedMin, gp / SEASON_GAMES);
+}
+
+/** Games this season after which the preseason projection no longer counts. */
+const SEASON_GAMES = 3;
+
+/**
+ * Expected minutes per game. From the box scores when the refresh added them (`rotation`: recent
+ * games, a coach's-decision DNP counts as 0), so a benching or a new role shows up the next day;
+ * otherwise this season's minutes take over from the projection within a few games.
+ */
 function expectedMinutes(p: Player): number {
+  if (p.rotation) return p.rotation.minutes;
   const s = p.stats;
   if (!s) return 0;
-  if (!s.projectedMin) return s.seasonMin ?? 0;
+  if (!s.projectedMin || (s.gamesPlayed ?? 0) >= SEASON_GAMES) return s.seasonMin ?? 0;
   return blend(s.seasonMin ?? 0, s.projectedMin, minutesWeight(p));
+}
+
+/**
+ * Minutes from injured teammates, measured from games with and without them (`rotation.deps`).
+ * The part he already played without them is in his minutes now, so it only adds the rest until
+ * they're back, and takes that part away after they return.
+ */
+function rotationBoosts(snapshot: LeagueSnapshot): Map<number, TeammateBoost[]> {
+  const out = new Map<number, TeammateBoost[]>();
+  const players = [...snapshot.teams.flatMap((t) => (t.roster ?? []).map((e) => e.player)), ...snapshot.freeAgentsTopN.map((f) => f.player)];
+  for (const p of players) {
+    const perMin = p.rotation?.deps.length ? pointsPerMinute(p) ?? (p.rotation.minutes ? expectedFppg(p) / p.rotation.minutes : 0) : 0;
+    if (!perMin) continue;
+    const boosts = p.rotation!.deps
+      .map((d) => {
+        const minutes = d.minutes * (1 - d.absentShare);
+        return { out: { id: d.id, name: d.name }, until: d.until, dated: true, minutes, fppg: minutes * perMin, after: -d.minutes * d.absentShare * perMin };
+      })
+      .filter((b) => b.minutes >= 1 || b.after <= -1);
+    if (boosts.length) out.set(p.id, boosts);
+  }
+  return out;
 }
 
 const isPointsLeague = (snapshot: LeagueSnapshot) => (snapshot.scoringType ?? '').includes('POINTS');
@@ -427,7 +467,10 @@ function computePlan(snapshot: LeagueSnapshot, core: number[], watchIds: number[
   const pointsLeague = isPointsLeague(snapshot);
   const valueOf = (p: Player) => playerValue(snapshot, p);
   // Categories leagues count every game the same, so extra minutes don't change a game's value there.
-  const boosts = pointsLeague ? teammateBoosts(snapshot, asOf, { fppg: expectedFppg, minutes: expectedMinutes, minutesWeight }) : new Map<number, TeammateBoost[]>();
+  const hasRotations = snapshot.teams.some((t) => t.roster?.some((e) => e.player.rotation));
+  const boosts = !pointsLeague ? new Map<number, TeammateBoost[]>()
+    : hasRotations ? rotationBoosts(snapshot)
+    : teammateBoosts(snapshot, asOf, { fppg: expectedFppg, minutes: expectedMinutes, minutesWeight });
 
   const returnOf = (id: number) => snapshot.injuries?.[id]?.returnDate;
   const roster: Candidate[] = me.roster
