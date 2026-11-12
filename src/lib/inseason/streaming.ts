@@ -87,8 +87,12 @@ export interface PlayerOutlook {
   gamesLeft: number;
   /** Games left that make the lineup. */
   starts: number;
-  /** Expected points from those starts (chance he plays counted). */
+  /** Points from those starts if he plays them. */
   points: number;
+  /** Starts he may sit (day-to-day, questionable): those games score 0 or full. */
+  doubtful: number;
+  /** One per matchup day left: he starts, plays but the lineup is full, or no game. */
+  days: ('start' | 'bench' | 'none')[];
 }
 
 /**
@@ -390,6 +394,9 @@ interface WeekResult {
   usableById: Map<number, number>;
   /** Expected points each player adds from the games he starts. */
   pointsById: Map<number, number>;
+  /** Points from his starts if he plays them (no injury odds), and starts that are in doubt. */
+  fullById: Map<number, number>;
+  doubtById: Map<number, number>;
   /** Who starts each day (by scoring period). */
   startedByDay: Map<number, Set<number>>;
 }
@@ -399,6 +406,8 @@ function simulateWeek(roster: Candidate[], week: MatchupWeekSchedule, today: num
   let usableGames = 0;
   const usableById = new Map<number, number>();
   const pointsById = new Map<number, number>();
+  const fullById = new Map<number, number>();
+  const doubtById = new Map<number, number>();
   const startedByDay = new Map<number, Set<number>>();
   for (const day of week.days) {
     if (day.scoringPeriodId < today) continue;
@@ -409,21 +418,25 @@ function simulateWeek(roster: Candidate[], week: MatchupWeekSchedule, today: num
         (week.teamGames[c.player.nbaTeamId] ?? []).includes(day.scoringPeriodId)
     );
     const ahead = daysBetween(asOf, day.date);
-    const val = new Map<number, number>();
+    const val = new Map<number, [number, number]>();
     const { total, started } = fillDay(playing, slots, (c) => {
-      const v = valueOn(c, day.date) * chanceOn(c.player.status, c.returnDate, day.date, ahead);
-      val.set(c.player.id, v);
-      return v;
+      const full = valueOn(c, day.date);
+      const chance = chanceOn(c.player.status, c.returnDate, day.date, ahead);
+      val.set(c.player.id, [full, chance]);
+      return full * chance;
     });
     points += total;
     usableGames += started.size;
     for (const id of started) {
       usableById.set(id, (usableById.get(id) ?? 0) + 1);
-      pointsById.set(id, (pointsById.get(id) ?? 0) + (val.get(id) ?? 0));
+      const [full, chance] = val.get(id) ?? [0, 0];
+      pointsById.set(id, (pointsById.get(id) ?? 0) + full * chance);
+      if (chance > 0) fullById.set(id, (fullById.get(id) ?? 0) + full);
+      if (chance > 0 && chance < 1) doubtById.set(id, (doubtById.get(id) ?? 0) + 1);
     }
     startedByDay.set(day.scoringPeriodId, started);
   }
-  return { points, usableGames, usableById, pointsById, startedByDay };
+  return { points, usableGames, usableById, pointsById, fullById, doubtById, startedByDay };
 }
 
 function gamesLeft(p: Player, week: MatchupWeekSchedule, from: number): number {
@@ -888,7 +901,12 @@ function computePlan(snapshot: LeagueSnapshot, core: number[], watchIds: number[
     outlook: roster
       .map((c) => {
         const d = describe(c, week, today, baseline.usableById.get(c.player.id) ?? 0, asOf, today, next);
-        return { id: d.id, name: d.name, nbaTeamAbbrev: d.nbaTeamAbbrev, status: d.status, fppg: d.fppg, gamesLeft: d.gamesLeft, starts: d.usableLeft, points: Math.round(baseline.pointsById.get(c.player.id) ?? 0) };
+        const id = c.player.id;
+        const days = week.days
+          .filter((day) => day.scoringPeriodId >= today)
+          .map((day): PlayerOutlook['days'][number] =>
+            baseline.startedByDay.get(day.scoringPeriodId)?.has(id) ? 'start' : (week.teamGames[c.player.nbaTeamId] ?? []).includes(day.scoringPeriodId) ? 'bench' : 'none');
+        return { id, name: d.name, nbaTeamAbbrev: d.nbaTeamAbbrev, status: d.status, fppg: d.fppg, gamesLeft: d.gamesLeft, starts: d.usableLeft, points: Math.round(baseline.fullById.get(id) ?? 0), doubtful: baseline.doubtById.get(id) ?? 0, days };
       })
       .sort((x, y) => y.points - x.points || y.fppg - x.fppg),
     watchlist,

@@ -554,12 +554,15 @@ export function HeadToHead({ plan, mg, o }: { plan: StreamingPlan; mg?: MatchupG
   });
   const last = p && o.projectedWithMoves !== undefined ? p.me.withMoves - o.projectedWithMoves : null;
   const days = mg?.opponent ? mg.days : [];
+  const weekDays = mg?.days ?? [];
+  // Points a game over his starts (a teammate's return can change it mid-week).
+  const per = (x: PlayerOutlook) => Math.round(x.starts ? x.points / x.starts : x.fppg);
   const mine = plan.outlook ?? [];
   const theirs = o.outlook ?? [];
   const best = (l: PlayerOutlook[]) => [...l].filter((x) => x.points > 0).sort((a, b) => b.fppg - a.fppg)[0];
   const lead = (x: PlayerOutlook | undefined, who: string) =>
     x && x.points > 0
-      ? `${who} best player, ${x.name}, plays ${x.starts} more ${x.starts === 1 ? 'time' : 'times'} at about ${Math.round(x.fppg)} a game: expect about ${x.points}.`
+      ? `${who} best player, ${x.name}, plays ${x.starts} more ${x.starts === 1 ? 'time' : 'times'} at about ${per(x)} a game: expect about ${x.points}${x.doubtful ? ' if he plays' : ''}.`
       : '';
   const wd = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
   return (
@@ -609,33 +612,61 @@ export function HeadToHead({ plan, mg, o }: { plan: StreamingPlan; mg?: MatchupG
       {(mine.length > 0 || theirs.length > 0) && (
         <div className="mt-4 border-t border-line pt-3">
           <p className="mb-2 text-sm">{lead(best(mine), 'Your')} {lead(best(theirs), 'Their')}</p>
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-5 lg:grid-cols-2">
             {[{ k: 'You', list: mine }, { k: o.name, list: theirs }].map((side) => (
-              <div key={side.k}>
-                <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted">{side.k}: games × pts a game</p>
-                <ul className="text-sm">
+              <table key={side.k} className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
+                    <th className="pb-1.5 font-medium">{side.k}</th>
+                    {weekDays.map((d) => <th key={d.date} className="w-7 pb-1.5 text-center font-medium">{wd(d.date).slice(0, 2)}</th>)}
+                    <th className="pb-1.5 pl-2 text-right font-medium">Pts</th>
+                  </tr>
+                </thead>
+                <tbody>
                   {side.list.map((x) => (
-                    <li key={x.id} className="flex justify-between gap-3 border-t border-line py-1">
-                      <span className="min-w-0 truncate">
-                        {x.name}
-                        {x.status !== 'ACTIVE' && <span className="text-red-700"> {x.status === 'DAY_TO_DAY' ? 'DTD' : x.status}</span>}
-                        <span className="text-muted">
-                          {' '}· {x.starts}{x.gamesLeft > x.starts ? ` of ${x.gamesLeft}` : ''} × {Math.round(x.fppg)}
-                        </span>
-                      </span>
-                      <span className={`shrink-0 tabular-nums ${x.points ? 'font-medium' : 'text-muted'}`}>{x.points || '–'}</span>
-                    </li>
+                    <tr key={x.id} className="border-t border-line">
+                      <td className="py-1.5 pr-2">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <Headshot id={x.id} name={x.name} size={28} />
+                          <div className="min-w-0">
+                            <div className="truncate font-medium">
+                              {x.name}
+                              {x.status !== 'ACTIVE' && <span className="ml-1 text-[11px] font-semibold text-red-700">{x.status === 'DAY_TO_DAY' ? 'DTD' : x.status}</span>}
+                            </div>
+                            <div className="flex items-center gap-1 text-xs text-muted">
+                              {x.nbaTeamAbbrev && <TeamLogo team={x.nbaTeamAbbrev} size={12} />}
+                              {x.nbaTeamAbbrev} · {x.starts} × {per(x)}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      {weekDays.map((d, i) => (
+                        <td key={d.date} className="text-center">
+                          {x.days[i] === 'start' ? (
+                            <span className={`inline-block h-2 w-2 rounded-full ${x.doubtful ? 'border border-red-700' : 'bg-fg'}`} />
+                          ) : x.days[i] === 'bench' ? (
+                            <span className="inline-block h-2 w-2 rounded-full border border-muted" />
+                          ) : (
+                            <span className="text-line">·</span>
+                          )}
+                        </td>
+                      ))}
+                      <td className="py-1.5 pl-2 text-right tabular-nums">
+                        {x.points ? <span className="font-medium">{x.points}</span> : <span className="text-muted">0</span>}
+                        {x.doubtful > 0 && <div className="text-[11px] text-red-700">or {Math.max(0, x.points - per(x) * x.doubtful)} if he sits</div>}
+                      </td>
+                    </tr>
                   ))}
-                  <li className="flex justify-between gap-3 border-t border-line py-1 text-muted">
-                    <span>Total</span>
-                    <span className="tabular-nums">{side.list.reduce((t, x) => t + x.points, 0)}</span>
-                  </li>
-                </ul>
-              </div>
+                  <tr className="border-t border-line text-muted">
+                    <td className="py-1.5" colSpan={weekDays.length + 1}>Total{side.list.some((x) => x.doubtful) ? ' if everyone plays' : ''}</td>
+                    <td className="py-1.5 pl-2 text-right font-medium tabular-nums text-fg">{side.list.reduce((t, x) => t + x.points, 0)}</td>
+                  </tr>
+                </tbody>
+              </table>
             ))}
           </div>
           <p className="mt-2 text-xs text-muted">
-            Games he starts × our per-game projection (last games’ minutes × his points per minute), with injury odds counted. “2 of 3” means one game lands on a full night.
+            Filled dot: he starts that night. Hollow: he plays but the lineup is full. Red: he’s day-to-day, so those games score full or 0. Points = starts × his points a game now (recent minutes × points per minute).
           </p>
         </div>
       )}
