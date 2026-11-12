@@ -552,11 +552,6 @@ export function HeadToHead({ plan, mg, o }: { plan: StreamingPlan; mg?: MatchupG
   const per = (x: PlayerOutlook) => Math.round(x.starts ? x.points / x.starts : x.fppg);
   const mine = plan.outlook ?? [];
   const theirs = o.outlook ?? [];
-  const best = (l: PlayerOutlook[]) => [...l].filter((x) => x.points > 0).sort((a, b) => b.fppg - a.fppg)[0];
-  const lead = (x: PlayerOutlook | undefined, who: string) =>
-    x && x.points > 0
-      ? `${who} best player, ${x.name}, plays ${x.starts} more ${x.starts === 1 ? 'time' : 'times'} at about ${per(x)} a game: expect about ${x.points}${x.doubtful ? ' if he plays' : ''}.`
-      : '';
   const wd = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
   return (
     <Panel
@@ -593,7 +588,6 @@ export function HeadToHead({ plan, mg, o }: { plan: StreamingPlan; mg?: MatchupG
       </table>
       {(mine.length > 0 || theirs.length > 0) && (
         <div className="mt-4 border-t border-line pt-3">
-          <p className="mb-2 text-sm">{lead(best(mine), 'Your')} {lead(best(theirs), 'Their')}</p>
           <div className="grid gap-5 lg:grid-cols-2">
             {[{ k: 'You', list: mine }, { k: o.name, list: theirs }].map((side) => (
               <table key={side.k} className="w-full text-sm">
