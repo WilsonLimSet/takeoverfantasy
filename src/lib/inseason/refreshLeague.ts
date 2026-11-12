@@ -60,6 +60,32 @@ async function addRotations(snapshot: LeagueSnapshot): Promise<void> {
   }
 }
 
+/**
+ * Recent games that count as much as the season's points per minute. Low: moves are for this week,
+ * so the last few games matter more than the season (Wilson: most pickups are short term). 5 games
+ * weigh about 70%, 3 games 60%. Rest-of-season values (value.ts) keep 5.
+ */
+const RECENT_RATE_K = 2;
+
+/**
+ * His recent points per minute in this league's scoring (game logs over his recent box-score
+ * minutes) against his season rate, recent games weighted heavily (RECENT_RATE_K): a bigger role brings more
+ * shots. Replaces the standard-scoring estimate from rotationOf when the logs are there.
+ */
+function leagueRates(snapshot: LeagueSnapshot): void {
+  const all = [...snapshot.teams.flatMap((t) => (t.roster ?? []).map((e) => e.player)), ...snapshot.freeAgentsTopN.map((f) => f.player)];
+  for (const p of all) {
+    const r = p.rotation, log = snapshot.gameLogs?.[p.id]?.cur, s = p.stats;
+    if (!r?.played?.length || !log?.length || !s?.seasonAvg || !s.seasonMin) continue;
+    const n = Math.min(r.played.length, log.length, 5);
+    const min = r.played.slice(0, n).reduce((a, b) => a + b, 0);
+    if (min < 40) continue;
+    const pts = log.slice(0, n).reduce((a, [, x]) => a + x, 0);
+    const season = s.seasonAvg / s.seasonMin, w = n / (n + RECENT_RATE_K);
+    r.rateScale = Math.round(((w * (pts / min) + (1 - w) * season) / season) * 100) / 100;
+  }
+}
+
 export async function refreshLeague(ctx: LeagueContext): Promise<RefreshedLeague> {
   const [espnData, injuries] = await Promise.all([
     withLeague(ctx.espn, () => getLeagueSnapshot()),
@@ -98,6 +124,7 @@ export async function refreshLeague(ctx: LeagueContext): Promise<RefreshedLeague
     console.warn('[refreshLeague] game logs failed:', e instanceof Error ? e.message : e);
     return undefined;
   });
+  if (snapshot.gameLogs) leagueRates(snapshot);
   if (snapshot.gameLogs && pending.length) {
     await gradePicks(kv, at, currentPeriod(snapshot), snapshot.gameLogs).catch((e) => console.warn('[refreshLeague] grading failed:', e));
   }

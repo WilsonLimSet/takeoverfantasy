@@ -34,6 +34,8 @@ export interface ValueContext {
   tips: Map<string, number[]>;
   /** Minutes in each recent game played, newest first (from the nightly box-score snapshots). */
   recentMin: Map<number, number[]>;
+  /** Fantasy points (ESPN standard) in the same games, lined up with recentMin (undefined when unsaved). */
+  recentFp: Map<number, (number | undefined)[]>;
   /** The same snapshots night by night, newest first, for "with him vs without him" splits. */
   nights: { date: string; min: Record<string, number> }[];
   /** Expected minute shares per injured player (filled as needed). */
@@ -47,7 +49,7 @@ export interface ValueContext {
 export async function valueContext(now = Date.now()): Promise<ValueContext> {
   const kv = kvStore();
   const nights = Array.from({ length: 10 }, (_, i) => easternDate(now - (i + 1) * DAY));
-  const [{ players }, injuries, tips, health, takeSet, snaps, dnps] = await Promise.all([
+  const [{ players }, injuries, tips, health, takeSet, snaps, dnps, fpts] = await Promise.all([
     getPlayers(),
     injuryReport().catch(() => new Map<number, InjuryReportEntry>()),
     teamTips().catch(() => new Map<string, number[]>()),
@@ -55,18 +57,23 @@ export async function valueContext(now = Date.now()): Promise<ValueContext> {
     loadTakes(),
     Promise.all(nights.map((d) => kv.get<Record<string, number>>(`social:minutes:${d}`).catch(() => null))),
     Promise.all(nights.map((d) => kv.get<Record<string, string>>(`social:dnp:${d}`).catch(() => null))),
+    Promise.all(nights.map((d) => kv.get<Record<string, number>>(`social:fpts:${d}`).catch(() => null))),
   ]);
   // A coach's-decision DNP is a 0-minute game: the rotation moved past him. Injury and rest DNPs
   // aren't counted at all.
   const recentMin = new Map<number, number[]>();
+  const recentFp = new Map<number, (number | undefined)[]>();
   snaps.forEach((snap, i) => {
     const night = new Map<number, number>();
     for (const [id, min] of Object.entries(snap ?? {})) if (min > 0) night.set(Number(id), min);
     for (const [id, why] of Object.entries(dnps[i] ?? {})) if (COACH.test(why) && !night.has(Number(id))) night.set(Number(id), 0);
-    for (const [id, min] of night) recentMin.set(id, [...(recentMin.get(id) ?? []), min]);
+    for (const [id, min] of night) {
+      recentMin.set(id, [...(recentMin.get(id) ?? []), min]);
+      recentFp.set(id, [...(recentFp.get(id) ?? []), min > 0 ? fpts[i]?.[id] : undefined]);
+    }
   });
   const nightList = nights.map((date, i) => ({ date, min: snaps[i] ?? {} })).filter((n) => Object.keys(n.min).length);
-  return { now, players, byId: new Map(players.map((p) => [p.id, p])), injuries, tips, recentMin, nights: nightList, health, takes: takeSet.index };
+  return { now, players, byId: new Map(players.map((p) => [p.id, p])), injuries, tips, recentMin, nights: nightList, health, takes: takeSet.index, recentFp };
 }
 
 export interface PlayerValue {
@@ -157,7 +164,7 @@ function expectedShares(q: Player, ctx: ValueContext): Map<number, number> {
   const hit = ctx.shares.get(q.id);
   if (hit) return hit;
   const rot = (x: Player): RotationPlayer => {
-    const core = perGameCore(x, (ctx.recentMin.get(x.id) ?? []).slice(0, 5));
+    const core = perGameCore(x, (ctx.recentMin.get(x.id) ?? []).slice(0, 5), undefined, ctx.recentFp.get(x.id)?.slice(0, 5));
     const gp = x.cur?.gp ?? 0;
     return { id: x.id, positions: x.pos, minutes: core.minutes, fppg: core.perGame, minutesWeight: gp / (gp + 3), gamesPlayed: gp };
   };
@@ -215,11 +222,19 @@ function absentShareOf(p: Player, ctx: ValueContext) {
  * own points per minute, in the league's scoring.
  */
 export function rotationOf(p: Player, ctx: ValueContext): PlayerRotation {
-  const { minutes } = perGameCore(p, (ctx.recentMin.get(p.id) ?? []).slice(0, 5), ctx.takes.get(normName(p.name)));
+  const recent = (ctx.recentMin.get(p.id) ?? []).slice(0, 5), fp = ctx.recentFp.get(p.id)?.slice(0, 5);
+  const take = ctx.takes.get(normName(p.name));
+  const core = perGameCore(p, recent, take, fp);
+  const { minutes } = core;
+  // How far his recent points per minute move him off his season rate (a bigger role, more shots).
+  const plain = perGameCore(p, recent, take).perGame;
+  const rateScale = plain > 0 ? Math.round((core.perGame / plain) * 100) / 100 : 1;
   const absentShare = absentShareOf(p, ctx);
   const r1 = (n: number) => Math.round(n * 10) / 10;
   return {
     minutes: r1(minutes),
+    rateScale,
+    played: recent.filter((m) => m > 0),
     deps: dependence(p, ctx).map((d) => ({ id: d.id, name: d.name, until: d.until, minutes: d.minutes, absentShare: Math.round(absentShare(d) * 100) / 100 })),
   };
 }
@@ -239,9 +254,10 @@ export function valuePlayer(p: Player, ctx: ValueContext, window?: { from: strin
   const st = statusOf(p, ctx);
   const recent = (ctx.recentMin.get(p.id) ?? []).slice(0, 5);
   const take = ctx.takes.get(normName(p.name));
-  const { minutes, relPts, scoPts, perGame } = perGameCore(p, recent, take);
+  const fp = ctx.recentFp.get(p.id)?.slice(0, 5);
+  const { minutes, relPts, scoPts, perGame } = perGameCore(p, recent, take, fp);
   // How much the AI's role read still moves him (it fades as his own games pile up).
-  const plain = take ? perGameCore(p, recent).perGame : perGame;
+  const plain = take ? perGameCore(p, recent, undefined, fp).perGame : perGame;
   const news = take && plain ? { headline: take.headline, date: take.notes[0]?.date ?? take.updated, factor: perGame / plain } : null;
   const sd = Math.sqrt((0.45 * Math.max(0, scoPts)) ** 2 + (0.25 * Math.max(0, relPts)) ** 2);
 

@@ -285,8 +285,10 @@ function pointsPerMinute(p: Player): number | undefined {
   const season = s?.seasonAvg ?? 0, gp = s?.gamesPlayed ?? 0;
   const proj = s?.projectedAvg ?? season;
   if (!s?.seasonMin || !season || gp <= 0) return undefined;
-  if (gp >= SEASON_GAMES || !s.projectedMin || !proj) return season / s.seasonMin;
-  return blend(season / s.seasonMin, proj / s.projectedMin, gp / SEASON_GAMES);
+  // His recent games' rate moves the season's (rotationOf: a bigger role brings more shots).
+  const scale = p.rotation?.rateScale ?? 1;
+  if (gp >= SEASON_GAMES || !s.projectedMin || !proj) return (season / s.seasonMin) * scale;
+  return blend(season / s.seasonMin, proj / s.projectedMin, gp / SEASON_GAMES) * scale;
 }
 
 /** Games this season after which the preseason projection no longer counts. */

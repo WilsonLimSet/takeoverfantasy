@@ -30,6 +30,10 @@ export interface Player {
 export interface PlayerRotation {
   /** Expected minutes a game now (recent games, coach's-decision DNPs as 0). */
   minutes: number;
+  /** His recent points per minute over his season rate (1 = no change), blended half and half by 5 games. */
+  rateScale?: number;
+  /** Minutes in his recent games played (newest first), to rate his recent points in league scoring. */
+  played?: number[];
   deps: {
     id: number;
     name: string;
