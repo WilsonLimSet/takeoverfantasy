@@ -34,6 +34,7 @@ In a matchup's last 2 game days, `buildStreamingPlan` adds `bridge`: free agents
 - **Score mode** (`plan.mode`): projected margin beyond max(15, 4% of the opponent's projection) gives `chase` (behind: rank on gain + half the spread, sd × √games) or `protect` (ahead: gain − half the spread); otherwise `even`. Only swaps worth the minimum gain on average get reordered. Chasing at the turn of the week, next week's early games count half.
 - **Close calls**: a move carries `runnerUp` (best different pickup) and `close` when the two rank within 5 pts or 10%. The UI says when the runner-up projects more and why it ranked second.
 - **Track record** (`pickLog.ts`): the moves route logs each day's ranked choices once (`picks:{user scope}{league}:{season}:{team}:{date}`, KV claim; scoped like the storage adapter so two users on one team never share a record). The refresh grades them from game logs once their periods are played. `TrackRecordPanel` shows how often our #1 beat our #2, per team and across all leagues.
+- **Pending moves**: rosters are read for today's scoring period and the next one (`rosterAsOfNext` in espnClient). An add/drop made after today's lock (ESPN applies it tomorrow) shows right away; the added player carries `fromPeriod` so he counts only from tomorrow.
 - **Finished day**: the refresh sets `snapshot.dayDone` when every NBA game today is final (public scoreboard), so `currentPeriod` stops counting a day whose points are already in the score.
 
 ## Rotation watch and schedule

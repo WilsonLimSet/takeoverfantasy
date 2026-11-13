@@ -78,6 +78,8 @@ export interface ESPNPlayerStats {
 
 export interface ESPNRosterEntry {
   playerId: number;
+  /** Set by us: picked up after today's lock, on the roster from this scoring period. */
+  fromScoringPeriod?: number;
   playerPoolEntry?: {
     id: number;
     player: ESPNPlayer;

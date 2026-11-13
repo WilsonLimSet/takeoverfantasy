@@ -352,6 +352,22 @@ async function getLeagueRosters(scoringPeriodId?: number): Promise<ESPNTeam[]> {
 }
 
 /**
+ * Rosters with moves already made: a manager who adds and drops after today's lock has that roster
+ * from the next scoring period (ESPN's period roster still shows the old one). Players added for
+ * then carry fromScoringPeriod so they don't count today; the rest of each team comes from today.
+ */
+function rosterAsOfNext(current: ESPNTeam[], next: ESPNTeam[], nextPeriod: number): ESPNTeam[] {
+  const byId = new Map(next.map((t) => [t.id, t]));
+  return current.map((t) => {
+    const later = byId.get(t.id)?.roster?.entries;
+    if (!later?.length || !t.roster) return t;
+    const now = new Set(t.roster.entries.map((e) => e.playerId));
+    const entries = later.map((e) => (now.has(e.playerId) ? e : { ...e, fromScoringPeriod: nextPeriod }));
+    return { ...t, roster: { ...t.roster, entries } };
+  });
+}
+
+/**
  * Get matchups for a specific week
  */
 async function getMatchups(week?: number): Promise<ESPNMatchup[]> {
@@ -533,14 +549,17 @@ export async function getLeagueSnapshot(): Promise<{
   const scoringPeriodId = settings.scoringPeriodId;
 
   // Fetch remaining data in parallel
-  const [teams, matchups, freeAgents, nbaSchedule, rawTransactions] = await Promise.all([
+  const [current, next, matchups, freeAgents, nbaSchedule, rawTransactions] = await Promise.all([
     getLeagueRosters(scoringPeriodId),
+    // Adds and drops made after today's lock show up only from the next scoring period.
+    getLeagueRosters(scoringPeriodId + 1).catch(() => [] as ESPNTeam[]),
     getMatchups(settings.currentMatchupPeriod),
     // Deep enough to reach bench players who pick up minutes when a teammate is out.
     getFreeAgents({ limit: 250, scoringPeriodId }),
     getNBAProTeamSchedule(),
     getRecentTransactions(),
   ]);
+  const teams = rosterAsOfNext(current, next, scoringPeriodId + 1);
 
   // Watchlisted players are often deeper than the top free agents, so fetch them by id too.
   const watchIds = [...new Set(teams.flatMap((t) => t.watchList ?? []))];
