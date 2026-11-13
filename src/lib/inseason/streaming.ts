@@ -516,7 +516,7 @@ function computePlan(snapshot: LeagueSnapshot, core: number[], watchIds: number[
   const returnOf = (id: number) => snapshot.injuries?.[id]?.returnDate;
   const roster: Candidate[] = me.roster
     .filter((e) => e.lineupSlotId !== IR_SLOT)
-    .map((e) => ({ player: e.player, value: valueOf(e.player), from: today, boosts: boosts.get(e.player.id), returnDate: returnOf(e.player.id) }));
+    .map((e) => ({ player: e.player, value: valueOf(e.player), from: Math.max(today, e.fromPeriod ?? 0), boosts: boosts.get(e.player.id), returnDate: returnOf(e.player.id) }));
 
   const coreIsDefault = core.length === 0;
   const coreIds = new Set(
@@ -560,7 +560,7 @@ function computePlan(snapshot: LeagueSnapshot, core: number[], watchIds: number[
     const theirs = game.homeTeamId === me.id ? game.awayPoints ?? 0 : game.homePoints;
     const oppRoster: Candidate[] = opp.roster
       .filter((e) => e.lineupSlotId !== IR_SLOT)
-      .map((e) => ({ player: e.player, value: valueOf(e.player), from: today, boosts: boosts.get(e.player.id), returnDate: returnOf(e.player.id) }));
+      .map((e) => ({ player: e.player, value: valueOf(e.player), from: Math.max(today, e.fromPeriod ?? 0), boosts: boosts.get(e.player.id), returnDate: returnOf(e.player.id) }));
     score = { mine, theirs, oppLeft: simulateWeek(oppRoster, week, today, slots, asOf).points };
     const margin = Math.round(mine + baseline.points - (theirs + score.oppLeft));
     const need = Math.max(MODE_MIN_POINTS, MODE_MARGIN * (theirs + score.oppLeft));

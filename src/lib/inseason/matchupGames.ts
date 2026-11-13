@@ -148,7 +148,7 @@ function sideGames(team: Team, week: MatchupWeekSchedule, today: number, slots: 
     const p = entry.player;
     const played = new Set(week.teamGames[p.nbaTeamId] ?? []);
     const returnDate = injuries?.[p.id]?.returnDate;
-    const playsByDay = week.days.map((d) => played.has(d.scoringPeriodId) &&
+    const playsByDay = week.days.map((d) => played.has(d.scoringPeriodId) && d.scoringPeriodId >= (entry.fromPeriod ?? 0) &&
       (d.scoringPeriodId < today || chanceOn(p.status, returnDate, d.date, Math.round((Date.parse(d.date) - Date.parse(todayDate)) / DAY_MS)) >= LIKELY));
     return {
       playerId: p.id,

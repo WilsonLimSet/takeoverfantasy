@@ -138,6 +138,7 @@ function transformRosterEntry(entry: ESPNRosterEntry): RosterEntry | null {
     lineupSlotId: entry.lineupSlotId,
     acquisitionDate: entry.acquisitionDate,
     appliedTotal: entry.playerPoolEntry.appliedStatTotal,
+    ...(entry.fromScoringPeriod ? { fromPeriod: entry.fromScoringPeriod } : {}),
   };
 }
 

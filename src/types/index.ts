@@ -67,6 +67,8 @@ export interface RosterEntry {
   lineupSlotId: number;
   acquisitionDate: number;
   appliedTotal?: number;
+  /** Added after today's lock (ESPN applies it next scoring period): starts from this period. */
+  fromPeriod?: number;
 }
 
 // Team with roster
