@@ -607,7 +607,9 @@ export function HeadToHead({ plan, mg, o }: { plan: StreamingPlan; mg?: MatchupG
                           <div className="min-w-0">
                             <div className="truncate font-medium">
                               {x.name}
-                              {x.status !== 'ACTIVE' && <span className="ml-1 text-[11px] font-semibold text-red-700">{x.status === 'DAY_TO_DAY' ? 'DTD' : x.status}</span>}
+                              {x.back ? (
+                                <span className="ml-1 text-[11px] font-semibold text-muted" title="Tagged out, but the injury report has him back then">Back {new Date(`${x.back}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' })}</span>
+                              ) : x.status !== 'ACTIVE' && <span className="ml-1 text-[11px] font-semibold text-red-700">{x.status === 'DAY_TO_DAY' ? 'DTD' : x.status}</span>}
                             </div>
                             <div className="flex items-center gap-1 text-xs text-muted">
                               {x.nbaTeamAbbrev && <TeamLogo team={x.nbaTeamAbbrev} size={12} />}
@@ -649,7 +651,7 @@ export function HeadToHead({ plan, mg, o }: { plan: StreamingPlan; mg?: MatchupG
             ))}
           </div>
           <p className="mt-2 text-xs text-muted">
-            Filled dot: he starts that night. Hollow: he plays but the lineup is full. Red: he’s day-to-day, so those games score full or 0. Points = starts × his points a game now (recent minutes × points per minute).
+            Filled dot: he starts that night. Hollow: he plays but the lineup is full. Red: he’s day-to-day, so those games score full or 0. “Back Sat”: listed out, counted from the day the injury report has him back. Points = starts × his points a game now (recent minutes × points per minute).
           </p>
         </div>
       )}

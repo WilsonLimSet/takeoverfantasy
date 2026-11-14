@@ -93,6 +93,8 @@ export interface PlayerOutlook {
   doubtful: number;
   /** One per matchup day left: he starts, plays but the lineup is full, or no game. */
   days: ('start' | 'bench' | 'none')[];
+  /** Tagged out but the report has him back this week (YYYY-MM-DD): he counts from then. */
+  back?: string;
 }
 
 /**
@@ -916,7 +918,9 @@ function computePlan(snapshot: LeagueSnapshot, core: number[], watchIds: number[
           .filter((day) => day.scoringPeriodId >= today)
           .map((day): PlayerOutlook['days'][number] =>
             baseline.startedByDay.get(day.scoringPeriodId)?.has(id) ? 'start' : (week.teamGames[c.player.nbaTeamId] ?? []).includes(day.scoringPeriodId) ? 'bench' : 'none');
-        return { id, name: d.name, nbaTeamAbbrev: d.nbaTeamAbbrev, status: d.status, fppg: d.fppg, gamesLeft: d.gamesLeft, starts: d.usableLeft, points: Math.round(baseline.fullById.get(id) ?? 0), doubtful: baseline.doubtById.get(id) ?? 0, days };
+        const lastDay = week.days[week.days.length - 1]?.date ?? '';
+        const back = c.returnDate && c.returnDate <= lastDay && ['OUT', 'INJURY_RESERVE', 'SUSPENSION'].includes(d.status) ? c.returnDate : undefined;
+        return { id, name: d.name, nbaTeamAbbrev: d.nbaTeamAbbrev, status: d.status, fppg: d.fppg, gamesLeft: d.gamesLeft, starts: d.usableLeft, points: Math.round(baseline.fullById.get(id) ?? 0), doubtful: baseline.doubtById.get(id) ?? 0, days, ...(back ? { back } : {}) };
       })
       .sort((x, y) => y.points - x.points || y.fppg - x.fppg),
     watchlist,
