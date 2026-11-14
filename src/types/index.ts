@@ -202,7 +202,7 @@ export interface LeagueSnapshot {
   /** Points (H2H_POINTS etc.) or categories league. */
   scoringType?: string;
   /** ESPN's estimated return dates (YYYY-MM-DD) for injured players, by player id. */
-  injuries?: Record<number, { returnDate?: string }>;
+  injuries?: Record<number, { returnDate?: string; /** Missed LONG_OUT_DAYS+ running (refreshLeague, from game logs). */ longOut?: boolean }>;
   /** Recent games' fantasy points under this league's scoring, by player id (gameLogs.ts). */
   gameLogs?: Record<number, GameLog>;
   /** A date (YYYY-MM-DD, US Eastern) whose NBA games were all final at fetch time. */

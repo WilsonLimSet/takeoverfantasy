@@ -16,10 +16,21 @@ const BACK_CHANCE = 0.85;
 /** In the games count, a game counts when he's at least this likely to play. */
 export const LIKELY = 0.5;
 
-/** Chance he plays a game on `date` (YYYY-MM-DD, US Eastern), `daysAhead` days from today. */
-export function chanceOn(status: PlayerStatus, returnDate: string | undefined, date: string, daysAhead: number): number {
+/**
+ * Missed this many days running: a long absence. Back from one, the report's date is a guess
+ * (Yves Missi, Nov 2026: three weeks out with a knee, return date "today", listed doubtful).
+ */
+export const LONG_OUT_DAYS = 7;
+
+/**
+ * Chance he plays a game on `date` (YYYY-MM-DD, US Eastern), `daysAhead` days from today. `longOut`:
+ * he's missed LONG_OUT_DAYS+ running. Still tagged out or doubtful on his return date, his next games
+ * count as doubtful until the team clears him (the tag changes).
+ */
+export function chanceOn(status: PlayerStatus, returnDate: string | undefined, date: string, daysAhead: number, longOut = false): number {
   if (returnDate && date < returnDate) return 0;
   const tagged = OUT_TAGS.includes(status) || status in TAG_CHANCE;
+  if (longOut && (OUT_TAGS.includes(status) || status === 'DOUBTFUL') && daysAhead < GAME_TIME_DAYS) return TAG_CHANCE.DOUBTFUL!;
   if (returnDate && tagged) return BACK_CHANCE;
   if (OUT_TAGS.includes(status)) return 0;
   if (status in TAG_CHANCE) return daysAhead >= GAME_TIME_DAYS ? 1 : TAG_CHANCE[status]!;

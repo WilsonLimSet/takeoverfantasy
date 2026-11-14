@@ -242,6 +242,8 @@ interface Candidate {
   boosts?: TeammateBoost[];
   /** The injury report's return date, when he's on it (availability.ts). */
   returnDate?: string;
+  /** Back from a long absence (availability.ts LONG_OUT_DAYS). */
+  longOut?: boolean;
 }
 
 /** What a candidate's game on this date is worth, with any teammate boost still running. */
@@ -277,8 +279,9 @@ const minutesWeight = (p: Player) => {
 };
 
 /**
- * Fantasy points per minute in the league's scoring, from this season's games. The preseason
- * projection only fills in before his third game (Wilson: once games are played, ignore it).
+ * Fantasy points per minute in the league's scoring, from this season's games. Scoring rate is
+ * noisy, so the projection fills in until RATE_GAMES (Yves Missi, Nov 2026: 58 and 14 in two games
+ * read as 36 a game; his projection was 25). Minutes stop using the projection after SEASON_GAMES.
  */
 function pointsPerMinute(p: Player): number | undefined {
   const s = p.stats;
@@ -287,9 +290,12 @@ function pointsPerMinute(p: Player): number | undefined {
   if (!s?.seasonMin || !season || gp <= 0) return undefined;
   // His recent games' rate moves the season's (rotationOf: a bigger role brings more shots).
   const scale = p.rotation?.rateScale ?? 1;
-  if (gp >= SEASON_GAMES || !s.projectedMin || !proj) return (season / s.seasonMin) * scale;
-  return blend(season / s.seasonMin, proj / s.projectedMin, gp / SEASON_GAMES) * scale;
+  if (gp >= RATE_GAMES || !s.projectedMin || !proj) return (season / s.seasonMin) * scale;
+  return blend(season / s.seasonMin, proj / s.projectedMin, gp / RATE_GAMES) * scale;
 }
+
+/** Games before his own points per minute count fully (the projection fills in until then). */
+const RATE_GAMES = 6;
 
 /** Games this season after which the preseason projection no longer counts. */
 const SEASON_GAMES = 3;
@@ -423,7 +429,7 @@ function simulateWeek(roster: Candidate[], week: MatchupWeekSchedule, today: num
     const val = new Map<number, [number, number]>();
     const { total, started } = fillDay(playing, slots, (c) => {
       const full = valueOn(c, day.date);
-      const chance = chanceOn(c.player.status, c.returnDate, day.date, ahead);
+      const chance = chanceOn(c.player.status, c.returnDate, day.date, ahead, c.longOut);
       val.set(c.player.id, [full, chance]);
       return full * chance;
     });
@@ -514,9 +520,10 @@ function computePlan(snapshot: LeagueSnapshot, core: number[], watchIds: number[
     : teammateBoosts(snapshot, asOf, { fppg: expectedFppg, minutes: expectedMinutes, minutesWeight });
 
   const returnOf = (id: number) => snapshot.injuries?.[id]?.returnDate;
+  const longOutOf = (id: number) => snapshot.injuries?.[id]?.longOut;
   const roster: Candidate[] = me.roster
     .filter((e) => e.lineupSlotId !== IR_SLOT)
-    .map((e) => ({ player: e.player, value: valueOf(e.player), from: Math.max(today, e.fromPeriod ?? 0), boosts: boosts.get(e.player.id), returnDate: returnOf(e.player.id) }));
+    .map((e) => ({ player: e.player, value: valueOf(e.player), from: Math.max(today, e.fromPeriod ?? 0), boosts: boosts.get(e.player.id), returnDate: returnOf(e.player.id), longOut: longOutOf(e.player.id) }));
 
   const coreIsDefault = core.length === 0;
   const coreIds = new Set(
@@ -532,11 +539,12 @@ function computePlan(snapshot: LeagueSnapshot, core: number[], watchIds: number[
     delay: fa.onWaivers ? WAIVER_DELAY_DAYS : 0,
     boosts: boosts.get(fa.player.id),
     returnDate: returnOf(fa.player.id),
+    longOut: longOutOf(fa.player.id),
   });
   // Someone out who's back before the week ends still counts for the games after his return.
   const freeAgents = [...pool.values()]
     .map(toCandidate)
-    .filter((c) => week.days.some((d) => d.scoringPeriodId >= Math.max(today, c.from) && (week.teamGames[c.player.nbaTeamId] ?? []).includes(d.scoringPeriodId) && chanceOn(c.player.status, c.returnDate, d.date, daysBetween(asOf, d.date)) > 0));
+    .filter((c) => week.days.some((d) => d.scoringPeriodId >= Math.max(today, c.from) && (week.teamGames[c.player.nbaTeamId] ?? []).includes(d.scoringPeriodId) && chanceOn(c.player.status, c.returnDate, d.date, daysBetween(asOf, d.date), c.longOut) > 0));
 
   const baseline = simulateWeek(roster, week, today, slots, asOf);
   const minGain = pointsLeague ? MIN_POINTS_GAIN : 1;
@@ -560,7 +568,7 @@ function computePlan(snapshot: LeagueSnapshot, core: number[], watchIds: number[
     const theirs = game.homeTeamId === me.id ? game.awayPoints ?? 0 : game.homePoints;
     const oppRoster: Candidate[] = opp.roster
       .filter((e) => e.lineupSlotId !== IR_SLOT)
-      .map((e) => ({ player: e.player, value: valueOf(e.player), from: Math.max(today, e.fromPeriod ?? 0), boosts: boosts.get(e.player.id), returnDate: returnOf(e.player.id) }));
+      .map((e) => ({ player: e.player, value: valueOf(e.player), from: Math.max(today, e.fromPeriod ?? 0), boosts: boosts.get(e.player.id), returnDate: returnOf(e.player.id), longOut: longOutOf(e.player.id) }));
     score = { mine, theirs, oppLeft: simulateWeek(oppRoster, week, today, slots, asOf).points };
     const margin = Math.round(mine + baseline.points - (theirs + score.oppLeft));
     const need = Math.max(MODE_MIN_POINTS, MODE_MARGIN * (theirs + score.oppLeft));
