@@ -13,6 +13,7 @@ import { fetchGameLogs } from './gameLogs';
 import { gradePicks, pendingPickIds } from './pickLog';
 import { expectedFppg } from './streaming';
 import { currentPeriod } from './matchupGames';
+import { LONG_OUT_DAYS } from './availability';
 import { kvStore } from './storage';
 import { rotationOf, sharedValueContext } from '@/lib/value';
 import type { LeagueContext } from './profile';
@@ -86,6 +87,16 @@ function leagueRates(snapshot: LeagueSnapshot): void {
   }
 }
 
+/** Players on the injury report whose last game is LONG_OUT_DAYS+ ago: their return date is a guess. */
+function markLongOuts(snapshot: LeagueSnapshot): void {
+  for (const [id, entry] of Object.entries(snapshot.injuries ?? {})) {
+    const log = snapshot.gameLogs?.[Number(id)];
+    if (!log) continue;
+    const last = log.cur[0]?.[0];
+    if (last === undefined || snapshot.scoringPeriodId - last > LONG_OUT_DAYS) entry.longOut = true;
+  }
+}
+
 export async function refreshLeague(ctx: LeagueContext): Promise<RefreshedLeague> {
   const [espnData, injuries] = await Promise.all([
     withLeague(ctx.espn, () => getLeagueSnapshot()),
@@ -124,7 +135,10 @@ export async function refreshLeague(ctx: LeagueContext): Promise<RefreshedLeague
     console.warn('[refreshLeague] game logs failed:', e instanceof Error ? e.message : e);
     return undefined;
   });
-  if (snapshot.gameLogs) leagueRates(snapshot);
+  if (snapshot.gameLogs) {
+    leagueRates(snapshot);
+    markLongOuts(snapshot);
+  }
   if (snapshot.gameLogs && pending.length) {
     await gradePicks(kv, at, currentPeriod(snapshot), snapshot.gameLogs).catch((e) => console.warn('[refreshLeague] grading failed:', e));
   }
